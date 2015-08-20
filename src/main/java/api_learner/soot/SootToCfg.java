@@ -3,6 +3,7 @@
  */
 package api_learner.soot;
 
+import java.io.File;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -40,16 +41,19 @@ public class SootToCfg {
 
 	private JimpleBasedInterproceduralCFG icfg = null;
 
+
 	/**
-	 * Run Soot and translate classes into Boogie/Horn
-	 * 
-	 * @param input
+	 * Generates the call graph for given input
+	 * @param input either the root folder of a set of class files or a jarfile
+	 * @return true if the input could be analyzed and false otherwise.
 	 */
-	public void run(String input) {
+	public boolean run(String input) {
 
 		// run soot to load all classes.
 		SootRunner runner = new SootRunner();
-		runner.run(input);
+		if (!runner.run(input)) {
+			return false;
+		}
 
 		if (Options.v().getCallGraphAlgorithm() != CallgraphAlgorithm.None) {
 			Log.info("Call Graph found");
@@ -64,6 +68,10 @@ public class SootToCfg {
 			processSootClass(sc);
 		}
 		Log.info("Total number of nodes created: "+MyCallGraph.v().countNode());
+		MyCallGraph.v().toDot(Options.v().getOutFile());
+		MyCallGraph.v().reset();
+		Log.info("Written ICFG to: "+ new File(Options.v().getOutFile()).getAbsolutePath());
+		return true;
 	}
 
 	/**

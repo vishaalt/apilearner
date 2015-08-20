@@ -48,17 +48,17 @@ public class SootRunner {
 
 	protected final soot.options.Options sootOpt = soot.options.Options.v();
 	
-	public void run(String input) {
+	public boolean run(String input) {
 		if (null == input || input.isEmpty()) {
-			return;
+			return false;
 		}
 
 		if (input.endsWith(".jar")) {
-			runWithJar(input);
+			return runWithJar(input);
 		} else {
 			File file = new File(input);
 			if (file.isDirectory()) {
-				runWithPath(input);
+				return runWithPath(input);
 			} else {
 				throw new RuntimeException("Don't know what to do with: "
 						+ input);
@@ -75,7 +75,7 @@ public class SootRunner {
 	 * @param smtFile
 	 *            Boogie file
 	 */
-	public void runWithJar(String jarFile) {
+	public boolean runWithJar(String jarFile) {
 		try {
 			// extract dependent JARs
 			List<File> jarFiles = new ArrayList<File>();
@@ -94,12 +94,19 @@ public class SootRunner {
 			sootOpt.set_src_prec(soot.options.Options.src_prec_class);
 			
 			List<String> classes = enumClasses(new File(jarFile));
+			if (classes.isEmpty()) {
+				Log.error("No classes found in "+jarFile);
+				return false;
+			}
+			
 			// finally, run soot
 			runSootAndAnalysis(classes);
 
 		} catch (Exception e) {
 			Log.error(e.toString());
+			return false;
 		}
+		return true;
 	}
 
 
@@ -112,7 +119,7 @@ public class SootRunner {
 	 * @param smtFile
 	 *            Boogie file
 	 */
-	public void runWithPath(String path) {
+	public boolean runWithPath(String path) {
 		try {
 			// dependent JAR files
 			List<File> jarFiles = new ArrayList<File>();
@@ -136,7 +143,9 @@ public class SootRunner {
 
 		} catch (Exception e) {
 			Log.error(e.toString());
+			return false;
 		}		
+		return true;
 	}
 
 	/**
@@ -176,7 +185,7 @@ public class SootRunner {
 	 * that could be loaded by Soot.
 	 * @param classes additional classes that need to be loaded (e.g., when analyzing jars)
 	 */
-	protected void runSootAndAnalysis(List<String> classes) {
+	protected boolean runSootAndAnalysis(List<String> classes) {
 		sootOpt.set_keep_line_number(true);
 		sootOpt.set_prepend_classpath(true); //-pp
 		sootOpt.set_output_format(soot.options.Options.output_format_none);
@@ -250,10 +259,13 @@ public class SootRunner {
 			Log.info("Done.");
 		} catch (UnsupportedEncodingException e) {
 			Log.error(e.toString());
+			return false;
 		} catch (RuntimeException e) {
 			Log.error("Soot could not process the input. STOPPING");
 			e.printStackTrace();
-		}				
+			return false;
+		}
+		return true;
 	}
 
 

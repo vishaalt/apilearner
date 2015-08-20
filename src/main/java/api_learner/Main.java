@@ -6,7 +6,6 @@ package api_learner;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 
-import api_learner.soot.MyCallGraph;
 import api_learner.soot.SootToCfg;
 import api_learner.util.Log;
 
@@ -21,8 +20,6 @@ public class Main {
 			parser.parseArgument(args);
 			SootToCfg soot2cfg = new SootToCfg();
 			soot2cfg.run(Options.v().getJavaInput());
-			MyCallGraph.v().toDot(Options.v().getOutFile());
-			MyCallGraph.v().reset();
 		} catch (CmdLineException e) {
 			Log.error(e.toString());
 			Log.error("java -jar apilearner.jar [options...] arguments...");
