@@ -54,10 +54,13 @@ public class Options {
 		return this.javaInput;
 	}
 
-	@Option(name = "-smt", usage = "Write SMT output", required = false)
-	private String smtFile;
-	public String getSmtFile() {
-		return this.smtFile;
+	@Option(name = "-o", usage = "Callgraph dot file", required = false)
+	private String outFile = "out.dot";
+	public String getOutFile() {
+		return this.outFile;
+	}
+	public void setOutFile(String file) {
+		this.outFile = file;
 	}
 
 	@Option(name = "-cg", usage = "Set the callgraph algorithm: CHA,RTA,VTA,SPARK, or None (default).", required = false)

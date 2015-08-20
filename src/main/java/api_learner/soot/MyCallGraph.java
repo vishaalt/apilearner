@@ -27,6 +27,11 @@ public enum MyCallGraph {
 	private Set<SootMethod> nodes = new HashSet<SootMethod>();
 	private Map<SootMethod, Set<SootMethod>> edges = new HashMap<SootMethod, Set<SootMethod>>();
 
+	public void reset() {
+		nodes.clear();
+		edges.clear();
+	}
+	
 	public void addEdge(SootMethod from, SootMethod to) {
 		this.nodes.add(from);
 		this.nodes.add(to);

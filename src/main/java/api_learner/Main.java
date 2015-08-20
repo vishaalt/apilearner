@@ -21,7 +21,7 @@ public class Main {
 			parser.parseArgument(args);
 			SootToCfg soot2cfg = new SootToCfg();
 			soot2cfg.run(Options.v().getJavaInput());
-			MyCallGraph.v().toDot("out.dot");
+			MyCallGraph.v().toDot(Options.v().getOutFile());
 		} catch (CmdLineException e) {
 			Log.error(e.toString());
 			Log.error("java -jar apilearner.jar [options...] arguments...");
