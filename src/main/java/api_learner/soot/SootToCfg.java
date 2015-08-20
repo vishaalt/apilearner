@@ -26,6 +26,7 @@ import soot.toolkits.exceptions.UnitThrowAnalysis;
 import soot.toolkits.graph.ExceptionalUnitGraph;
 import api_learner.Options;
 import api_learner.soot.SootRunner.CallgraphAlgorithm;
+import api_learner.util.Log;
 
 /**
  * This is the main class for the translation. It first invokes Soot to load all
@@ -51,16 +52,18 @@ public class SootToCfg {
 		runner.run(input);
 
 		if (Options.v().getCallGraphAlgorithm() != CallgraphAlgorithm.None) {
-			System.err.println("Call Graph found");
+			Log.info("Call Graph found");
 			icfg = new JimpleBasedInterproceduralCFG();
 		} else {
-			System.err.println("No Callgraph. Improvising");
+			Log.info("No Callgraph (use -cg spark if you want one). Improvising!");
 		}
+		
+		Log.info("Total classes in secene : "+Scene.v().getClasses().size());
 		
 		for (SootClass sc : Scene.v().getClasses()) {
 			processSootClass(sc);
 		}
-
+		Log.info("Total number of nodes created: "+MyCallGraph.v().countNode());
 	}
 
 	/**

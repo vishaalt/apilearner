@@ -54,7 +54,6 @@ public class SootRunner {
 		}
 
 		if (input.endsWith(".jar")) {
-			// run with JAR file
 			runWithJar(input);
 		} else {
 			File file = new File(input);
@@ -89,11 +88,14 @@ public class SootRunner {
 				cp += File.pathSeparatorChar + Options.v().getClasspath();
 			}
 			
+			Log.info("Classpath: " + cp);
 			// set soot-class-path
 			sootOpt.set_soot_classpath(cp);			
+			sootOpt.set_src_prec(soot.options.Options.src_prec_class);
 			
+			List<String> classes = enumClasses(new File(jarFile));
 			// finally, run soot
-			runSootAndAnalysis(enumClasses(new File(jarFile)));
+			runSootAndAnalysis(classes);
 
 		} catch (Exception e) {
 			Log.error(e.toString());
@@ -180,8 +182,8 @@ public class SootRunner {
 		sootOpt.set_output_format(soot.options.Options.output_format_none);
 		sootOpt.set_allow_phantom_refs(true);
 				
-		for (String s : classes) {
-			Scene.v().addBasicClass(s, SootClass.BODIES);
+		for (String s : classes) {			
+			Scene.v().addBasicClass(s, SootClass.BODIES);			
 		}
 		
 		CallgraphAlgorithm cga = Options.v().getCallGraphAlgorithm();
@@ -239,17 +241,11 @@ public class SootRunner {
 		        PackManager.v().getPack("cg").apply();
 			}			
 			
-//			Log.info("Building ICFG.");
-//			//now create the icfg
-//			if (Options.v().getCallGraphAlgorithm() != CallgraphAlgorithm.None) {							 
-//				SootKitchenSink.v().iCfg = new JimpleBasedInterproceduralCFG();
-//			} else {
-//				OnTheFlyJimpleBasedICFG.loadAllClassesOnClassPathToSignatures();
-//				Scene.v().getOrMakeFastHierarchy();
-////				SootKitchenSink.v().iCfg = new OnTheFlyJimpleBasedICFG(Scene.v().getEntryPoints());
-//			}
-//
-//			SootKitchenSink.v().pointsToAnalysis = Scene.v().getPointsToAnalysis();
+			for (SootClass sc : Scene.v().getClasses()) {
+				if (classes.contains(sc.getName())) {
+					sc.setApplicationClass();
+				}				
+			}
 			
 			Log.info("Done.");
 		} catch (UnsupportedEncodingException e) {

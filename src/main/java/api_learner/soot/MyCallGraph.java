@@ -27,6 +27,10 @@ public enum MyCallGraph {
 	private Set<SootMethod> nodes = new HashSet<SootMethod>();
 	private Map<SootMethod, Set<SootMethod>> edges = new HashMap<SootMethod, Set<SootMethod>>();
 
+	public int countNode() {
+		return this.nodes.size();
+	}
+	
 	public void reset() {
 		nodes.clear();
 		edges.clear();
@@ -49,7 +53,7 @@ public enum MyCallGraph {
 			for (SootMethod m : this.nodes) {
 				String shape = " shape=oval ";
 				pw.println("\t\"" + m.getSignature() + "\" " + "[label=\""
-						+ m.getSignature() + "\" " + shape + "];\n");
+						+ m.getName() + "\" " + shape + "];\n");
 			}
 			pw.append("\n");
 			for (Entry<SootMethod, Set<SootMethod>> e : this.edges.entrySet()) {

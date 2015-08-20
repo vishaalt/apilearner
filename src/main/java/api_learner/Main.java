@@ -22,6 +22,7 @@ public class Main {
 			SootToCfg soot2cfg = new SootToCfg();
 			soot2cfg.run(Options.v().getJavaInput());
 			MyCallGraph.v().toDot(Options.v().getOutFile());
+			MyCallGraph.v().reset();
 		} catch (CmdLineException e) {
 			Log.error(e.toString());
 			Log.error("java -jar apilearner.jar [options...] arguments...");
