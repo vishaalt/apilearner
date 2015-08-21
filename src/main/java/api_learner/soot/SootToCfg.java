@@ -104,7 +104,7 @@ public class SootToCfg {
 
 	private void transformStmtListICfg(Body body) {
 		SootMethod from = body.getMethod();
-		for (Unit u : this.icfg.getCallsFromWithin(from)) {			
+		for (Unit u : this.icfg.getCallsFromWithin(from)) {
 			for (SootMethod to : this.icfg.getCalleesOfCallAt(u)) {				
 				MyCallGraph.v().addEdge(from, to);
 			}

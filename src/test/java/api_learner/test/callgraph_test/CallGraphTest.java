@@ -60,8 +60,6 @@ public class CallGraphTest extends AbstractTest {
 		String dotFileName = this.sourceFile.getName() + "_cha.dot";
 		Options.v().setOutFile(dotFileName);
 		testWithCallgraphAlgorithm("none");
-		System.out.println("Writing dot to "+ dotFileName);
-		MyCallGraph.v().toDot(dotFileName);
 	}	
 
 	@Test
@@ -69,8 +67,6 @@ public class CallGraphTest extends AbstractTest {
 		String dotFileName = this.sourceFile.getName() + "_spark.dot";
 		Options.v().setOutFile(dotFileName);
 		testWithCallgraphAlgorithm("spark");
-		System.out.println("Writing dot to "+ dotFileName);
-		MyCallGraph.v().toDot(dotFileName);		
 	}	
 
 	//TODO: VTA and RTA are not yet working.
