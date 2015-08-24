@@ -15,7 +15,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import api_learner.Options;
-import api_learner.soot.MyCallGraph;
 import api_learner.soot.SootToCfg;
 import api_learner.test.AbstractTest;
 
@@ -78,7 +77,6 @@ public class CallGraphTest extends AbstractTest {
 	
 	protected void testWithCallgraphAlgorithm(String algorithm) {
 		soot.G.reset();
-		MyCallGraph.v().reset();
 		System.out.println("Running test " + this.sourceFile.getName() + " with algorithm " + algorithm);		
 		SootToCfg soot2cfg = new SootToCfg();
 		Options.v().setCallGraphAlgorithm(algorithm);
