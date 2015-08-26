@@ -6,31 +6,25 @@ package api_learner.soot;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.Collection;
+import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.Stack;
 
 import soot.Body;
 import soot.Scene;
 import soot.SootClass;
 import soot.SootMethod;
 import soot.Unit;
-import soot.Value;
-import soot.jimple.DynamicInvokeExpr;
-import soot.jimple.InterfaceInvokeExpr;
-import soot.jimple.InvokeExpr;
-import soot.jimple.SpecialInvokeExpr;
-import soot.jimple.StaticInvokeExpr;
-import soot.jimple.Stmt;
-import soot.jimple.VirtualInvokeExpr;
 import soot.jimple.toolkits.ide.icfg.JimpleBasedInterproceduralCFG;
 import soot.toolkits.exceptions.UnitThrowAnalysis;
 import soot.toolkits.graph.DirectedGraph;
 import soot.toolkits.graph.ExceptionalUnitGraph;
-import soot.toolkits.scalar.ForwardFlowAnalysis;
 import api_learner.Options;
 import api_learner.soot.SootRunner.CallgraphAlgorithm;
 import api_learner.util.Log;
@@ -46,6 +40,9 @@ import api_learner.util.Log;
 public class SootToCfg {
 
 	private JimpleBasedInterproceduralCFG icfg = null;
+
+	Map<SootMethod, Set<SootMethod>> callDependencyMap = new HashMap<SootMethod, Set<SootMethod>>();
+	Map<SootMethod, LocalCallGraphBuilder> procedureCallGraphs = new HashMap<SootMethod, LocalCallGraphBuilder>();
 
 	/**
 	 * Generates the call graph for given input
@@ -68,14 +65,137 @@ public class SootToCfg {
 		} else {
 			Log.info("No Callgraph (use -cg spark if you want one). Improvising!");
 		}
-
 		Log.info("Total classes in secene : " + Scene.v().getClasses().size());
 
+		/*
+		 * Construct the call graphs for each method.
+		 */
 		for (SootClass sc : Scene.v().getClasses()) {
 			processSootClass(sc);
 		}
+		/*
+		 * Now create one global call graph.
+		 */
+		MyCallDependencyGraph myCG = new MyCallDependencyGraph(
+				this.callDependencyMap);
+		toDot("cg.dot", myCG);
+		for (SootMethod m : myCG.getHeads()) {
+			System.out.println("Heads " + m.getName());
+		}
+		for (SootMethod m : myCG.getTails()) {
+			System.out.println("Tails " + m.getName());
+		}
+
+		int i = 0;
+		// build the icfg...
+		for (SootMethod m : myCG.getHeads()) {
+			LocalCallGraphBuilder cgb = inlineCallgraphs(m,
+					new Stack<Entry<SootMethod, LocalCallGraphBuilder>>());
+			if (!cgb.getNodes().isEmpty()) {
+				cgb.toDot(String.format("%04d", i++) + "_"+ m.getName()+".dot");
+			}
+		}
 
 		return true;
+	}
+
+	private LocalCallGraphBuilder inlineCallgraphs(SootMethod m,
+			Stack<Entry<SootMethod, LocalCallGraphBuilder>> callStack) {
+		LocalCallGraphBuilder cgb = this.procedureCallGraphs.get(m).duplicate();
+		/*
+		 * Push the current procedure on the stack so, in case we call it
+		 * recursively, we don't start going into an infinite loop.
+		 */
+		callStack
+				.push(new AbstractMap.SimpleEntry<SootMethod, LocalCallGraphBuilder>(
+						m, cgb));
+
+		List<InterprocdurcalCallGraphNode> todo = new LinkedList<InterprocdurcalCallGraphNode>(
+				cgb.getNodes());
+		for (InterprocdurcalCallGraphNode n : todo) {
+			for (SootMethod callee : new HashSet<SootMethod>(n.getCallees())) {
+				if (this.procedureCallGraphs.containsKey(callee)) {
+					n.getCallees().remove(callee);
+					LocalCallGraphBuilder recursiveCg = findInStack(callee,
+							callStack);
+					if (recursiveCg == null) {
+						System.err.println("Inlining " + callee.getBytecodeSignature() + " into " + m.getBytecodeSignature());
+						recursiveCg = inlineCallgraphs(callee, callStack);
+						// connect all predecessors to the successors of the
+						// source of the callee (i.e.,
+						// throw away the old source).
+						for (InterprocdurcalCallGraphNode pre : n.predessors) {
+							for (InterprocdurcalCallGraphNode entry : recursiveCg
+									.getSource().successors) {
+								pre.connectTo(entry);
+							}
+						}
+						// now for the sink
+						if (recursiveCg.getSink() != null) {
+							for (InterprocdurcalCallGraphNode ret : n.successors) {
+								for (InterprocdurcalCallGraphNode suc : recursiveCg.getSink().predessors) {
+									suc.connectTo(ret);
+								}
+							}
+						}
+					} else {
+//						System.err.println("\twoooo Recursive! "
+//								+ callee.getBytecodeSignature());
+					}
+				} else {
+//					System.err
+//							.println("\tooo " + callee.getBytecodeSignature());
+				}
+			}
+			if (n.getCallees().isEmpty() && n != cgb.getSource()
+					&& n != cgb.getSink()) {
+				// then we could inline all calls and we can
+				// safely remove the node
+				for (InterprocdurcalCallGraphNode pre : n.predessors) {
+					pre.successors.remove(n);
+				}
+				for (InterprocdurcalCallGraphNode suc : n.successors) {
+					suc.predessors.remove(n);
+				}
+				cgb.removeNode(n);
+			}
+		}
+		// pop the current procedure.
+		callStack.pop();
+		return cgb;
+	}
+
+	private LocalCallGraphBuilder findInStack(SootMethod m,
+			Stack<Entry<SootMethod, LocalCallGraphBuilder>> callStack) {
+		for (Entry<SootMethod, LocalCallGraphBuilder> entry : callStack) {
+			if (m == entry.getKey())
+				return entry.getValue();
+		}
+		return null;
+	}
+
+	public void toDot(String filename, MyCallDependencyGraph myCG) {
+
+		File fpw = new File(filename);
+		try (PrintWriter pw = new PrintWriter(fpw, "utf-8");) {
+			pw.println("digraph dot {");
+			for (SootMethod n : myCG.getNodes()) {
+				String shape = " shape=oval ";
+				pw.println("\t\"" + n.getSignature() + "\" " + "[label=\""
+						+ n.getName() + "\" " + shape + "];\n");
+			}
+			pw.append("\n");
+			for (SootMethod from : myCG.getNodes()) {
+				for (SootMethod to : myCG.getSuccsOf(from)) {
+					pw.append("\t\"" + from.getSignature() + "\" -> \""
+							+ to.getSignature() + "\";\n");
+				}
+
+			}
+			pw.println("}");
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -93,7 +213,6 @@ public class SootToCfg {
 				processSootMethod(sm);
 			}
 		}
-
 	}
 
 	private void processSootMethod(SootMethod sm) {
@@ -101,7 +220,6 @@ public class SootToCfg {
 			transformStmtList(sm.retrieveActiveBody());
 		}
 	}
-
 
 	/**
 	 * Transforms a list of statements
@@ -111,226 +229,25 @@ public class SootToCfg {
 	 */
 	private void transformStmtList(Body body) {
 		DirectedGraph<Unit> cfg;
-		if (this.icfg!=null) {
+		if (this.icfg != null) {
 			cfg = this.icfg.getOrCreateUnitGraph(body);
 		} else {
-			cfg = new ExceptionalUnitGraph(body,
-					UnitThrowAnalysis.v());
-		}
-		System.err.println(body.getMethod().getSignature());
-		MyFlow flow = new MyFlow(cfg);
-		toDot(body.getMethod().getName()+body.getMethod().getNumber()+".dot", flow.getNodes());
-	}
-	
-	
-	public void toDot(String filename, Set<Node> nodes) {
-		File fpw = new File(filename);
-		try (PrintWriter pw = new PrintWriter(fpw, "utf-8");) {
-			pw.println("digraph dot {");
-			for (Node n : nodes) {
-				String shape = " shape=oval ";
-				pw.println("\t\"" + n.getLabel() + "\" " + "[label=\""
-						+ n.getLabel() + "\" " + shape + "];\n");
-			}
-			pw.append("\n");
-			for (Node from : nodes) {
-				for (Node to : from.getSuccessors()) {
-					pw.append("\t\"" + from.getLabel() + "\" -> \""
-							+ to.getLabel() + "\";\n");					
-				}
-				
-			}
-			pw.println("}");
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}	
-	
-	private static int hack_counter = 0;
-	
-	public static class Node {
-		
-		Set<SootMethod> callees = new HashSet<SootMethod>();
-		Set<Node> successors = new HashSet<Node>();
-		private String label;
-
-		public void setCallees(Set<SootMethod> callees) {
-			this.label = callees.iterator().next().getName()+ "__"+(hack_counter++);
-			this.callees = callees;
-		}
-
-		public void connectTo(Node succ) {
-			this.successors.add(succ);
-		}
-
-		public Set<Node> getSuccessors() {
-			return this.successors;
-		}
-
-		public Set<SootMethod> getCallees() {
-			return this.callees;
-		}
-
-		public String getLabel() {
-			return label;
-		}
-
-		public void setLabel(String label) {
-			this.label = label;
-		}
-	}
-
-	public class MyFlow extends ForwardFlowAnalysis<Unit, Set<Node>> {
-
-		private Map<Unit, Node> nodes = new HashMap<Unit, Node>();
-		private final Node source, sink;
-
-		public MyFlow(DirectedGraph<Unit> graph) {
-			super(graph);
-			this.source = new Node();
-			this.source.setLabel("source");
-			
-			this.doAnalysis();
-			// generate a unique sink.
-			this.sink = new Node();
-			this.sink.setLabel("sink");
-			for (Entry<Unit, Node> entry : this.nodes.entrySet()) {
-				Node n = entry.getValue();
-				if (n.getSuccessors().isEmpty()) {
-					n.connectTo(sink);
-				}
-			}
+			cfg = new ExceptionalUnitGraph(body, UnitThrowAnalysis.v());
 		}
 		
-		public Set<Node> getNodes() {
-			Set<Node> res = new HashSet<Node>();
-			res.addAll(this.nodes.values());
-			return res;
-		}
-		
-		@Override
-		protected void flowThrough(Set<Node> in, Unit u, Set<Node> out) {
-
-			Set<SootMethod> callees = findCallees(u);
-			if (callees.isEmpty()) {
-				// then in == out
-				out.addAll(in);
-			} else {
-				Node n;
-				if (this.nodes.containsKey(u)) {
-					n = this.nodes.get(u);
-				} else {
-					n = new Node();
-					n.setCallees(callees);
-					this.nodes.put(u, n);
-				}
-				for (Node pre : in) {
-					pre.connectTo(n);
-					out.clear();
-					out.add(n);
+		LocalCallGraphBuilder flow = new LocalCallGraphBuilder(cfg, this.icfg);
+		// now collect all methods in ApplicationClasses that can be called from
+		// the body.
+		Set<SootMethod> calledApplicationMethods = new HashSet<SootMethod>();
+		for (InterprocdurcalCallGraphNode n : flow.getNodes()) {
+			for (SootMethod m : n.getCallees()) {
+				if (m.getDeclaringClass().isApplicationClass()) {
+					calledApplicationMethods.add(m);
 				}
 			}
 		}
-
-		@Override
-		protected void copy(Set<Node> from, Set<Node> to) {
-			// TODO Auto-generated method stub
-			to.clear();
-			to.addAll(from);
-		}
-
-		@Override
-		protected void merge(Set<Node> in1, Set<Node> in2, Set<Node> out) {
-			out.clear();
-			out.addAll(in1);
-			out.addAll(in2);
-		}
-
-		@Override
-		protected Set<Node> newInitialFlow() {
-			Set<Node> init = new HashSet<Node>();
-			init.add(this.source);
-			return init;
-		}
-
-	}
-
-	private Set<SootMethod> findCallees(Unit u) {
-		Set<SootMethod> callees = new HashSet<SootMethod>();
-		
-		if (this.icfg!=null) {
-			//if we have the icfg, its simple.
-			callees.addAll(this.icfg.getCalleesOfCallAt(u));
-			return callees;
-		}
-		
-		if (u instanceof Stmt) {
-			Stmt s = (Stmt) u;
-			if (s.containsInvokeExpr()) {
-				InvokeExpr invoke = s.getInvokeExpr();
-				if (invoke instanceof DynamicInvokeExpr) {
-					DynamicInvokeExpr ivk = (DynamicInvokeExpr) invoke;
-					// TODO: Log.error("no idea how to handle DynamicInvoke: " +
-					// ivk);
-					callees.add(ivk.getMethod());
-				} else if (invoke instanceof InterfaceInvokeExpr) {
-					InterfaceInvokeExpr ivk = (InterfaceInvokeExpr) invoke;
-					callees.addAll(resolveVirtualCall(s, ivk.getBase(),
-							ivk.getMethod()));
-				} else if (invoke instanceof SpecialInvokeExpr) {
-					SpecialInvokeExpr ivk = (SpecialInvokeExpr) invoke;
-					// TODO: Log.info("not sure how to treat constructors");
-					callees.add(ivk.getMethod());
-				} else if (invoke instanceof StaticInvokeExpr) {
-					StaticInvokeExpr ivk = (StaticInvokeExpr) invoke;
-					callees.add(ivk.getMethod());
-				} else if (invoke instanceof VirtualInvokeExpr) {
-					VirtualInvokeExpr ivk = (VirtualInvokeExpr) invoke;
-					callees.addAll(resolveVirtualCall(s, ivk.getBase(),
-							ivk.getMethod()));
-				}
-			}
-		}
-		return callees;
-	}
-
-	private Set<SootMethod> resolveVirtualCall(Stmt s, Value base,
-			SootMethod callee) {
-		Set<SootMethod> res = new HashSet<SootMethod>();
-		SootClass sc = callee.getDeclaringClass();
-
-		if (!sc.isJavaLibraryClass()) {
-			// don't care about non application API calls.
-			res.add(callee);
-			return res;
-		}
-
-		if (callee.hasActiveBody()) {
-			res.add(callee);
-		}
-
-		Collection<SootClass> possibleClasses;
-		if (sc.isInterface()) {
-			possibleClasses = Scene.v().getFastHierarchy()
-					.getAllImplementersOfInterface(sc);
-		} else {
-			possibleClasses = Scene.v().getFastHierarchy().getSubclassesOf(sc);
-		}
-		for (SootClass sub : possibleClasses) {
-			if (sub.resolvingLevel() < SootClass.SIGNATURES) {
-				// Log.error("Not checking subtypes of " + sub.getName());
-				// Then we probably really don't care.
-			} else {
-				if (sub.declaresMethod(callee.getSubSignature())) {
-					res.add(sub.getMethod(callee.getSubSignature()));
-				}
-			}
-		}
-
-		if (res.isEmpty()) {
-			res.add(callee);
-		}
-		return res;
+		callDependencyMap.put(body.getMethod(), calledApplicationMethods);
+		this.procedureCallGraphs.put(body.getMethod(), flow);
 	}
 
 }
