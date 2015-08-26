@@ -80,11 +80,10 @@ public class SootToCfg {
 				this.callDependencyMap);
 		toDot("cg.dot", myCG);
 		for (SootMethod m : myCG.getHeads()) {
-			System.out.println("Heads " + m.getName());
+			System.out.println("Entries " + m.getName());
 		}
-		for (SootMethod m : myCG.getTails()) {
-			System.out.println("Tails " + m.getName());
-		}
+		//TODO: some procedures might be ignored ...
+		// ... if their entry is already recursive
 
 		int i = 0;
 		// build the icfg...
@@ -119,7 +118,7 @@ public class SootToCfg {
 					LocalCallGraphBuilder recursiveCg = findInStack(callee,
 							callStack);
 					if (recursiveCg == null) {
-						System.err.println("Inlining " + callee.getBytecodeSignature() + " into " + m.getBytecodeSignature());
+//						System.err.println("Inlining " + callee.getBytecodeSignature() + " into " + m.getBytecodeSignature());
 						recursiveCg = inlineCallgraphs(callee, callStack);
 						// connect all predecessors to the successors of the
 						// source of the callee (i.e.,
@@ -139,8 +138,16 @@ public class SootToCfg {
 							}
 						}
 					} else {
-//						System.err.println("\twoooo Recursive! "
-//								+ callee.getBytecodeSignature());
+						System.err.println("\twoooo Recursive! "
+								+ callee.getBytecodeSignature());
+						//connect the predecessors of n to the recursive call
+						for (InterprocdurcalCallGraphNode pre : n.predessors) {
+							for (InterprocdurcalCallGraphNode entry : recursiveCg
+									.getSource().successors) {
+								pre.connectTo(entry);
+							}
+						}
+						//no need to process the successors because they are already connected.
 					}
 				} else {
 //					System.err
