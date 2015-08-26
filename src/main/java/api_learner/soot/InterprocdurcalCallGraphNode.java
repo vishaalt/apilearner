@@ -13,6 +13,7 @@ public class InterprocdurcalCallGraphNode {
 	public Set<InterprocdurcalCallGraphNode> successors = new HashSet<InterprocdurcalCallGraphNode>();
 	public Set<InterprocdurcalCallGraphNode> predessors = new HashSet<InterprocdurcalCallGraphNode>();
 	private String label;
+	private String id;
 
 	/**
 	 * default constructor
@@ -22,7 +23,8 @@ public class InterprocdurcalCallGraphNode {
 	}	
 	
 	public void setCallees(Set<SootMethod> callees) {
-		this.label = callees.iterator().next().getName()+ "__"+UUID.randomUUID().toString();
+		this.label = callees.iterator().next().getName();
+		this.id = UUID.randomUUID().toString();
 		this.callees = callees;
 	}
 
@@ -43,8 +45,14 @@ public class InterprocdurcalCallGraphNode {
 		return label;
 	}
 
+	public String getUniqueLabel() {
+		return label+"__"+this.id;
+	}
+
+	
 	public void setLabel(String label) {
 		this.label = label;
+		this.id = UUID.randomUUID().toString();
 	}
 	
 	
@@ -58,6 +66,7 @@ public class InterprocdurcalCallGraphNode {
 	 */
 	private InterprocdurcalCallGraphNode(String label, Set<SootMethod> callees) {
 		this.label = label;
+		this.id = UUID.randomUUID().toString();
 		this.callees.addAll(callees);
 	}
 	

@@ -3,9 +3,6 @@
  */
 package api_learner.soot;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -78,7 +75,7 @@ public class SootToCfg {
 		 */
 		MyCallDependencyGraph myCG = new MyCallDependencyGraph(
 				this.callDependencyMap);
-		toDot("cg.dot", myCG);
+		myCG.toDot("cg.dot");
 		for (SootMethod m : myCG.getHeads()) {
 			System.out.println("Entries " + m.getName());
 		}
@@ -118,7 +115,8 @@ public class SootToCfg {
 					LocalCallGraphBuilder recursiveCg = findInStack(callee,
 							callStack);
 					if (recursiveCg == null) {
-//						System.err.println("Inlining " + callee.getBytecodeSignature() + " into " + m.getBytecodeSignature());
+						//which mean that this procedure has not been 
+						//inline on this path.
 						recursiveCg = inlineCallgraphs(callee, callStack);
 						// connect all predecessors to the successors of the
 						// source of the callee (i.e.,
@@ -136,7 +134,13 @@ public class SootToCfg {
 									suc.connectTo(ret);
 								}
 							}
+							//now disconnect the old sink.
+							for (InterprocdurcalCallGraphNode pre : recursiveCg.getSink().predessors) {
+								pre.successors.remove(recursiveCg.getSink());
+							}
 						}
+						
+						
 					} else {
 						System.err.println("\twoooo Recursive! "
 								+ callee.getBytecodeSignature());
@@ -181,29 +185,7 @@ public class SootToCfg {
 		return null;
 	}
 
-	public void toDot(String filename, MyCallDependencyGraph myCG) {
 
-		File fpw = new File(filename);
-		try (PrintWriter pw = new PrintWriter(fpw, "utf-8");) {
-			pw.println("digraph dot {");
-			for (SootMethod n : myCG.getNodes()) {
-				String shape = " shape=oval ";
-				pw.println("\t\"" + n.getSignature() + "\" " + "[label=\""
-						+ n.getName() + "\" " + shape + "];\n");
-			}
-			pw.append("\n");
-			for (SootMethod from : myCG.getNodes()) {
-				for (SootMethod to : myCG.getSuccsOf(from)) {
-					pw.append("\t\"" + from.getSignature() + "\" -> \""
-							+ to.getSignature() + "\";\n");
-				}
-
-			}
-			pw.println("}");
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
 
 	/**
 	 * Analyze a single SootClass and transform all its Methods
@@ -237,7 +219,7 @@ public class SootToCfg {
 	private void transformStmtList(Body body) {
 		DirectedGraph<Unit> cfg;
 		if (this.icfg != null) {
-			cfg = this.icfg.getOrCreateUnitGraph(body);
+			cfg = this.icfg.getOrCreateUnitGraph(body);			
 		} else {
 			cfg = new ExceptionalUnitGraph(body, UnitThrowAnalysis.v());
 		}
@@ -255,6 +237,8 @@ public class SootToCfg {
 		}
 		callDependencyMap.put(body.getMethod(), calledApplicationMethods);
 		this.procedureCallGraphs.put(body.getMethod(), flow);
+		
+//		flow.toDot("local"+body.getMethod().getName()+body.getMethod().getNumber()+".dot");
 	}
 
 }

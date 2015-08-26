@@ -27,6 +27,9 @@ package api_learner.soot;
  * by Antoine Mine, 2005/01/24
  */
 
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -127,4 +130,28 @@ public class MyCallDependencyGraph implements DirectedGraph<SootMethod> {
 	public List<SootMethod> getPredsOf(SootMethod s) {
 		return pred.get(s);
 	}
+	
+	public void toDot(String filename) {
+
+		File fpw = new File(filename);
+		try (PrintWriter pw = new PrintWriter(fpw, "utf-8");) {
+			pw.println("digraph dot {");
+			for (SootMethod n : this.getNodes()) {
+				String shape = " shape=oval ";
+				pw.println("\t\"" + n.getSignature() + "\" " + "[label=\""
+						+ n.getName() + "\" " + shape + "];\n");
+			}
+			pw.append("\n");
+			for (SootMethod from : this.getNodes()) {
+				for (SootMethod to : this.getSuccsOf(from)) {
+					pw.append("\t\"" + from.getSignature() + "\" -> \""
+							+ to.getSignature() + "\";\n");
+				}
+
+			}
+			pw.println("}");
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}	
 }

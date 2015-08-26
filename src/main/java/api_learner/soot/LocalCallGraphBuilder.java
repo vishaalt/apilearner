@@ -19,6 +19,8 @@ import soot.Value;
 import soot.jimple.DynamicInvokeExpr;
 import soot.jimple.InterfaceInvokeExpr;
 import soot.jimple.InvokeExpr;
+import soot.jimple.ReturnStmt;
+import soot.jimple.ReturnVoidStmt;
 import soot.jimple.SpecialInvokeExpr;
 import soot.jimple.StaticInvokeExpr;
 import soot.jimple.Stmt;
@@ -72,20 +74,12 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 		
 		this.source = new InterprocdurcalCallGraphNode();
 		this.source.setLabel("source");		
+		this.sink = new InterprocdurcalCallGraphNode();
+		this.sink.setLabel("sink");
 		
 		this.doAnalysis();
 		// generate a unique sink.
-		boolean sinkConnected = false;
-		this.sink = new InterprocdurcalCallGraphNode();
-		this.sink.setLabel("sink");
-		for (Entry<Unit, InterprocdurcalCallGraphNode> entry : this.nodes.entrySet()) {
-			InterprocdurcalCallGraphNode n = entry.getValue();
-			if (n.getSuccessors().isEmpty()) {
-				n.connectTo(sink);
-				sinkConnected = true;
-			}
-		}
-		if (!sinkConnected) {
+		if (this.sink.predessors.isEmpty()) {
 			this.sink=null;
 		}
 	}
@@ -111,11 +105,21 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 	
 	@Override
 	protected void flowThrough(Set<InterprocdurcalCallGraphNode> in, Unit u, Set<InterprocdurcalCallGraphNode> out) {
-
+		if (this.graph.getHeads().contains(u)) {
+			in.add(this.source);
+		}
+				
 		Set<SootMethod> callees = findCallees(u);
 		if (callees.isEmpty()) {
 			// then in == out
-			out.addAll(in);
+			out.clear();
+			if (u instanceof ReturnVoidStmt || u instanceof ReturnStmt) {
+				for (InterprocdurcalCallGraphNode pre : in) {
+					pre.connectTo(this.sink);
+				}
+			} else {
+				out.addAll(in);				
+			}
 		} else {
 			InterprocdurcalCallGraphNode n;
 			if (this.nodes.containsKey(u)) {
@@ -127,9 +131,9 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 			}
 			for (InterprocdurcalCallGraphNode pre : in) {
 				pre.connectTo(n);
-				out.clear();
-				out.add(n);
 			}
+			out.clear();
+			out.add(n);
 		}
 	}
 
@@ -160,7 +164,7 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 	@Override
 	protected Set<InterprocdurcalCallGraphNode> newInitialFlow() {
 		Set<InterprocdurcalCallGraphNode> init = new HashSet<InterprocdurcalCallGraphNode>();
-		init.add(this.source);
+//		init.add(this.source);
 		return init;
 	}
 
@@ -262,14 +266,14 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 			pw.println("digraph dot {");
 			for (InterprocdurcalCallGraphNode n : done) {
 				String shape = " shape=oval ";
-				pw.println("\t\"" + n.getLabel() + "\" " + "[label=\""
+				pw.println("\t\"" + n.getUniqueLabel() + "\" " + "[label=\""
 						+ n.getLabel() + "\" " + shape + "];\n");
 			}
 			pw.append("\n");
 			for (InterprocdurcalCallGraphNode from : done) {
 				for (InterprocdurcalCallGraphNode to : from.getSuccessors()) {
-					pw.append("\t\"" + from.getLabel() + "\" -> \""
-							+ to.getLabel() + "\";\n");					
+					pw.append("\t\"" + from.getUniqueLabel() + "\" -> \""
+							+ to.getUniqueLabel() + "\";\n");					
 				}
 				
 			}

@@ -61,12 +61,12 @@ public class CallGraphTest extends AbstractTest {
 		testWithCallgraphAlgorithm("none");
 	}	
 
-	@Test
-	public void test_spark() {		
-		String dotFileName = this.sourceFile.getName() + "_spark.dot";
-		Options.v().setOutFile(dotFileName);
-		testWithCallgraphAlgorithm("spark");
-	}	
+//	@Test
+//	public void test_spark() {		
+//		String dotFileName = this.sourceFile.getName() + "_spark.dot";
+//		Options.v().setOutFile(dotFileName);
+//		testWithCallgraphAlgorithm("spark");
+//	}	
 
 	//TODO: VTA and RTA are not yet working.
 //	@Test
