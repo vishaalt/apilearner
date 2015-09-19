@@ -234,8 +234,8 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 				// Log.error("Not checking subtypes of " + sub.getName());
 				// Then we probably really don't care.
 			} else {
-				if (sub.declaresMethod(callee.getSubSignature())) {
-					res.add(sub.getMethod(callee.getSubSignature()));
+				if (sub.declaresMethod(callee.getName(), callee.getParameterTypes(), callee.getReturnType())) {
+					res.add(sub.getMethod(callee.getName(), callee.getParameterTypes(), callee.getReturnType()));
 				}
 			}
 		}
