@@ -90,6 +90,7 @@ public class CallGraphTest extends AbstractTest {
 		if (classDir==null) {
 			Assert.fail();
 		}
+		Options.v().setNamespace("javax.net.ssl");
 		soot2cfg.run(classDir.getAbsolutePath());
 	}
 	

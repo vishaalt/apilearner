@@ -20,7 +20,7 @@ public class SSLSocketExampleA {
 	public SSLSocketExampleA() {
         this.ssf = (SSLSocketFactory) SSLSocketFactory.getDefault();
         try {
-			this.socket = (SSLSocket) ssf.createSocket("gmail.com", 443);
+			this.socket = (SSLSocket) ssf.createSocket("mail.google.com", 443);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -36,8 +36,8 @@ public class SSLSocketExampleA {
         // issue a certificate with gmail.com. Example is intended
         // for verification purposes. 
         if (!hv.verify("mail.google.com", s)) {
-            throw new SSLHandshakeException("Expected mail.google.com, found " + s.getPeerPrincipal());
-        }		
+            throw new SSLHandshakeException("Expected mail.google.com, found " + s.getPeerHost());
+        }	
 	}
 	
 	public void read() throws IOException {

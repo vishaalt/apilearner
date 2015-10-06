@@ -89,20 +89,25 @@ public class Options {
 	
 
 	/**
-	 * Scope
-	 */
-	@Option(name = "--scope", usage = "Scope")
-	private String scope;
-
-	/**
 	 * Classpath
 	 */
 	@Option(name = "-cp", usage = "Classpath")
 	private String classpath;
 
 
+	/**
+	 * Classpath
+	 */
+	@Option(name = "-namespace", usage = "Namespace for which we want to build the icfg")
+	private String namespace=null;
 
+	public final String getNamespace() {
+		return namespace;
+	}
 
+	public void setNamespace(final String ns) {
+		namespace = ns;
+	}
 
 
 	/**

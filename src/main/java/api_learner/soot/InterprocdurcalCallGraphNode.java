@@ -23,7 +23,7 @@ public class InterprocdurcalCallGraphNode {
 	}	
 	
 	public void setCallees(Set<SootMethod> callees) {
-		this.label = callees.iterator().next().getName();
+		this.label = callees.iterator().next().getSignature();
 		this.id = UUID.randomUUID().toString();
 		this.callees = callees;
 	}

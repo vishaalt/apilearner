@@ -26,6 +26,7 @@ import soot.jimple.StaticInvokeExpr;
 import soot.jimple.Stmt;
 import soot.jimple.VirtualInvokeExpr;
 import soot.jimple.toolkits.ide.icfg.JimpleBasedInterproceduralCFG;
+import api_learner.Options;
 import soot.toolkits.graph.DirectedGraph;
 import soot.toolkits.scalar.ForwardFlowAnalysis;
 
@@ -212,6 +213,19 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 		Set<SootMethod> res = new HashSet<SootMethod>();
 		SootClass sc = callee.getDeclaringClass();
 
+		if (Options.v().getNamespace()!=null) {			
+			String fullClassName = callee.getDeclaringClass().getPackageName() + "." + callee.getDeclaringClass().getName();
+			if (fullClassName.contains(Options.v().getNamespace())) {
+				res.add(callee);
+				return res;				
+			} else {
+				if (!sc.isApplicationClass()) {
+					System.err.println("Ignoreing " + callee);
+					//if this is not an application class, pretend there was no call.
+					return res;
+				}
+			}
+		}
 		if (!sc.isJavaLibraryClass()) {
 			// don't care about non application API calls.
 			res.add(callee);
