@@ -96,7 +96,7 @@ public class Options {
 
 
 	/**
-	 * Classpath
+	 * Namespace
 	 */
 	@Option(name = "-namespace", usage = "Namespace for which we want to build the icfg")
 	private String namespace=null;

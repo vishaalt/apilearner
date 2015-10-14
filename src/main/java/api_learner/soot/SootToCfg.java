@@ -88,7 +88,7 @@ public class SootToCfg {
 			LocalCallGraphBuilder cgb = inlineCallgraphs(m,
 					new Stack<Entry<SootMethod, LocalCallGraphBuilder>>());
 			if (!cgb.getNodes().isEmpty()) {
-				cgb.toDot(String.format("%04d", i++) + "_"+ m.getName()+".dot");
+				cgb.toDot("dot/" + String.format("%04d", i++) + "_" + m.getName()+".dot");
 			}
 		}
 
