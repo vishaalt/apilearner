@@ -17,6 +17,7 @@ import soot.SootMethod;
 import soot.Unit;
 import soot.Value;
 import soot.jimple.DynamicInvokeExpr;
+import soot.jimple.InstanceInvokeExpr;
 import soot.jimple.InterfaceInvokeExpr;
 import soot.jimple.InvokeExpr;
 import soot.jimple.ReturnStmt;
@@ -24,11 +25,10 @@ import soot.jimple.ReturnVoidStmt;
 import soot.jimple.SpecialInvokeExpr;
 import soot.jimple.StaticInvokeExpr;
 import soot.jimple.Stmt;
-import soot.jimple.VirtualInvokeExpr;
 import soot.jimple.toolkits.ide.icfg.JimpleBasedInterproceduralCFG;
-import api_learner.Options;
 import soot.toolkits.graph.DirectedGraph;
 import soot.toolkits.scalar.ForwardFlowAnalysis;
+import api_learner.Options;
 
 
 public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<InterprocdurcalCallGraphNode>> {
@@ -187,19 +187,11 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 					// TODO: Log.error("no idea how to handle DynamicInvoke: " +
 					// ivk);
 					callees.add(ivk.getMethod());
-				} else if (invoke instanceof InterfaceInvokeExpr) {
-					InterfaceInvokeExpr ivk = (InterfaceInvokeExpr) invoke;
-					callees.addAll(resolveVirtualCall(s, ivk.getBase(),
-							ivk.getMethod()));
-				} else if (invoke instanceof SpecialInvokeExpr) {
-					SpecialInvokeExpr ivk = (SpecialInvokeExpr) invoke;
-					// TODO: Log.info("not sure how to treat constructors");
-					callees.add(ivk.getMethod());
 				} else if (invoke instanceof StaticInvokeExpr) {
 					StaticInvokeExpr ivk = (StaticInvokeExpr) invoke;
 					callees.add(ivk.getMethod());
-				} else if (invoke instanceof VirtualInvokeExpr) {
-					VirtualInvokeExpr ivk = (VirtualInvokeExpr) invoke;
+				} else if (invoke instanceof InstanceInvokeExpr) {
+					InstanceInvokeExpr ivk = (InstanceInvokeExpr) invoke;
 					callees.addAll(resolveVirtualCall(s, ivk.getBase(),
 							ivk.getMethod()));
 				}
@@ -208,32 +200,40 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 		return callees;
 	}
 
+	
+	private boolean isInterestingProcedure(SootMethod callee) {
+		SootClass sc = callee.getDeclaringClass();
+		if (Options.v().getNamespace()!=null) {	
+			String fullClassName = callee.getDeclaringClass().getPackageName() + "." + callee.getDeclaringClass().getName();
+			if (fullClassName.contains(Options.v().getNamespace())) {
+				return true;
+			} else {
+				//do nothing
+			}
+		} else {
+			if (sc.isJavaLibraryClass()) {
+				//TODO: if no namespace is given, we consider any jdk call interesting.
+				//just for debugging
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	private Set<SootMethod> resolveVirtualCall(Stmt s, Value base,
 			SootMethod callee) {
 		Set<SootMethod> res = new HashSet<SootMethod>();
 		SootClass sc = callee.getDeclaringClass();
-
-		if (Options.v().getNamespace()!=null) {			
-			String fullClassName = callee.getDeclaringClass().getPackageName() + "." + callee.getDeclaringClass().getName();
-			if (fullClassName.contains(Options.v().getNamespace())) {
-				res.add(callee);
-				return res;				
-			} else {
-				if (!sc.isApplicationClass()) {
-					System.err.println("Ignoreing " + callee);
-					//if this is not an application class, pretend there was no call.
-					return res;
-				}
-			}
-		}
-		if (!sc.isJavaLibraryClass()) {
-			// don't care about non application API calls.
-			res.add(callee);
-			return res;
-		}
-
+		
 		if (callee.hasActiveBody()) {
 			res.add(callee);
+		} else {
+			if (!isInterestingProcedure(callee)) {
+				// if we neither have a body for the procedure, nor the are
+				// interested in the procedure, we just throw it away by returning
+				// the empty set.
+				return new HashSet<SootMethod>();
+			}
 		}
 
 		Collection<SootClass> possibleClasses;
