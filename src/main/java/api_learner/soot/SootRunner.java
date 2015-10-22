@@ -33,8 +33,6 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
-import api_learner.Options;
-import api_learner.util.Log;
 import soot.PackManager;
 import soot.Scene;
 import soot.SootClass;
@@ -46,36 +44,45 @@ import soot.SootClass;
  */
 public class SootRunner {
 
-	protected final soot.options.Options sootOpt = soot.options.Options.v();
-	
-	public boolean run(String input) {
-		if (null == input || input.isEmpty()) {
-			return false;
-		}
+	protected final soot.options.Options sootOpt;
 
+	public SootRunner() {
+		sootOpt = soot.options.Options.v();
+	}
+
+	public void run(String input, String classPath, CallgraphAlgorithm cga) {
+		if (null == input || input.isEmpty()) {
+			return;
+		}
 		if (input.endsWith(".jar")) {
-			return runWithJar(input);
+			// run with JAR file
+			runWithJar(input, classPath, cga);
+		} else if (input.endsWith(".apk")) {
+			runWithApk(input, classPath, cga);
 		} else {
 			File file = new File(input);
 			if (file.isDirectory()) {
-				return runWithPath(input);
+				runWithPath(input, classPath, cga);
 			} else {
-				throw new RuntimeException("Don't know what to do with: "
-						+ input);
+				throw new RuntimeException("Don't know what to do with: " + input);
 			}
 		}
 	}
-	
+
 	
 	/**
 	 * Runs Soot by using a JAR file
 	 * 
 	 * @param jarFile
 	 *            JAR file
-	 * @param smtFile
-	 *            Boogie file
+	 * @param classPath
+	 *            Optional classpath (may be null)
+	 * @param cga
+	 *            Which {@link CallgraphAlgorithm} should be used? May not be
+	 *            null.
+	 * 
 	 */
-	public boolean runWithJar(String jarFile) {
+	private void runWithJar(String jarFile, String classPath, CallgraphAlgorithm cga) {
 		try {
 			// extract dependent JARs
 			List<File> jarFiles = new ArrayList<File>();
@@ -84,50 +91,63 @@ public class SootRunner {
 
 			// additional classpath available?
 			String cp = buildClassPath(jarFiles);
-			if (Options.v().hasClasspath()) {
-				cp += File.pathSeparatorChar + Options.v().getClasspath();
+			if (classPath != null) {
+				cp += File.pathSeparatorChar + classPath;
 			}
-			
-			Log.info("Classpath: " + cp);
+
 			// set soot-class-path
-			sootOpt.set_soot_classpath(cp);			
-			sootOpt.set_src_prec(soot.options.Options.src_prec_class);
-			
-			List<String> classes = enumClasses(new File(jarFile));
-			if (classes.isEmpty()) {
-				Log.error("No classes found in "+jarFile);
-				return false;
-			}
-			
+			sootOpt.set_soot_classpath(cp);
+
 			// finally, run soot
-			runSootAndAnalysis(classes);
+			runSootAndAnalysis(enumClasses(new File(jarFile)), cga);
 
 		} catch (Exception e) {
-			Log.error(e.toString());
-			return false;
+			throw e;
 		}
-		return true;
 	}
+	
+	private void runWithApk(String apkFile, String androidPlatformPath, CallgraphAlgorithm cga) {
+		try {
+			sootOpt.set_src_prec(soot.options.Options.src_prec_apk);
+			//https://github.com/Sable/android-platforms
+			if (androidPlatformPath==null) {
+				throw new RuntimeException("You need to pass the android-platforms folder from https://github.com/Sable/android-platforms");
+			}
+			sootOpt.set_android_jars(androidPlatformPath);
+			List<String> procdir = new LinkedList<String>();
+			procdir.add(apkFile);
+			sootOpt.set_process_dir(procdir);
+			
+			// finally, run soot
+			runSootAndAnalysis(enumClasses(new File(apkFile)), cga);
 
-
+		} catch (Exception e) {
+			throw e;
+		}
+	}
+	
 
 	/**
 	 * Runs Soot by using a path (e.g., from Joogie)
 	 * 
 	 * @param path
-	 *            Path
-	 * @param smtFile
-	 *            Boogie file
+	 *            Path * @param classPath Optional classpath (may be null)
+	 * @param classPath
+	 *            Optional classpath (may be null)
+	 * @param cga
+	 *            Which {@link CallgraphAlgorithm} should be used? May not be
+	 *            null.
 	 */
-	public boolean runWithPath(String path) {
+	private void runWithPath(String path, String classPath, CallgraphAlgorithm cga) {
+		assert cga != null;
 		try {
 			// dependent JAR files
 			List<File> jarFiles = new ArrayList<File>();
 
 			// additional classpath available?
 			String cp = buildClassPath(jarFiles);
-			if (Options.v().hasClasspath()) {
-				cp += File.pathSeparatorChar + Options.v().getClasspath();
+			if (classPath != null) {
+				cp += File.pathSeparatorChar + classPath;
 			}
 
 			// set soot-class-path
@@ -137,22 +157,20 @@ public class SootRunner {
 			List<String> processDirs = new LinkedList<String>();
 			processDirs.add(path);
 			sootOpt.set_process_dir(processDirs);
-
+			
 			// finally, run soot
-			runSootAndAnalysis(new LinkedList<String>());
+			runSootAndAnalysis(new LinkedList<String>(), cga);
 
 		} catch (Exception e) {
-			Log.error(e.toString());
-			return false;
-		}		
-		return true;
+			throw e;
+		}
 	}
 
 	/**
 	 * Enumeration containing the callgraph algorithms supported for the use
 	 * with the data flow tracker
 	 * 
-	 * @see https 
+	 * @see https
 	 *      ://github.com/secure-software-engineering/soot-infoflow/blob/develop
 	 *      /src/soot/jimple/infoflow/Infoflow.java
 	 */
@@ -163,7 +181,7 @@ public class SootRunner {
 	/**
 	 * Enumeration containing the aliasing algorithms supported by FlowDroid
 	 * 
-	 * @see https 
+	 * @see https
 	 *      ://github.com/secure-software-engineering/soot-infoflow/blob/develop
 	 *      /src/soot/jimple/infoflow/Infoflow.java
 	 */
@@ -171,32 +189,33 @@ public class SootRunner {
 		/**
 		 * A fully flow-sensitive algorithm based on Andromeda
 		 */
-		FlowSensitive,
-		/**
-		 * A flow-insensitive algorithm based on Soot's point-to-sets
-		 */
+		FlowSensitive, /**
+						 * A flow-insensitive algorithm based on Soot's
+						 * point-to-sets
+						 */
 		PtsBased
 	}
 
-
-
 	/**
-	 * Run Soot and creates an inter-procedural callgraph
-	 * that could be loaded by Soot.
-	 * @param classes additional classes that need to be loaded (e.g., when analyzing jars)
+	 * Run Soot and creates an inter-procedural callgraph that could be loaded
+	 * by Soot.
+	 * 
+	 * @param classes
+	 *            additional classes that need to be loaded (e.g., when
+	 *            analyzing jars)
 	 */
-	protected boolean runSootAndAnalysis(List<String> classes) {
+	protected void runSootAndAnalysis(List<String> classes, CallgraphAlgorithm cga) {
+		assert cga != null;
 		sootOpt.set_keep_line_number(true);
-		sootOpt.set_prepend_classpath(true); //-pp
+		sootOpt.set_prepend_classpath(true); // -pp
 		sootOpt.set_output_format(soot.options.Options.output_format_none);
 		sootOpt.set_allow_phantom_refs(true);
-				
-		for (String s : classes) {			
-			Scene.v().addBasicClass(s, SootClass.BODIES);			
+
+		for (String s : classes) {
+			Scene.v().addBasicClass(s, SootClass.BODIES);
 		}
-		
-		CallgraphAlgorithm cga = Options.v().getCallGraphAlgorithm();
-		if (cga!=CallgraphAlgorithm.None) {
+
+		if (cga != CallgraphAlgorithm.None) {
 			sootOpt.set_whole_program(true);
 			// Configure the callgraph algorithm
 			switch (cga) {
@@ -207,7 +226,7 @@ public class SootRunner {
 				sootOpt.setPhaseOption("cg.spark", "on");
 				sootOpt.setPhaseOption("cg.spark", "rta:true");
 				sootOpt.setPhaseOption("cg.spark", "string-constants:true");
-				
+
 				break;
 			case VTA:
 				sootOpt.setPhaseOption("cg.spark", "on");
@@ -217,58 +236,50 @@ public class SootRunner {
 			case SPARK:
 				sootOpt.setPhaseOption("cg.spark", "on");
 				sootOpt.setPhaseOption("cg.spark", "string-constants:true");
+				sootOpt.setPhaseOption("cg.spark", "on-fly-cg:false");
 				break;
 			default:
 				throw new RuntimeException("Invalid callgraph algorithm");
 			}
 		}
 
-		// Iterator Hack
-		Scene.v().addBasicClass(
-				"org.eclipse.jdt.core.compiler.CategorizedProblem",
-				SootClass.HIERARCHY);
-		Scene.v().addBasicClass("java.lang.Iterable", SootClass.SIGNATURES);
-		Scene.v().addBasicClass("java.util.Iterator", SootClass.SIGNATURES);
-		Scene.v()
-				.addBasicClass("java.lang.reflect.Array", SootClass.SIGNATURES);
-
 		try {
 			// redirect soot output into a stream.
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			soot.G.v().out = new PrintStream(baos, true, "utf-8");				
-			//Now load the soot classes.
-			Scene.v().loadNecessaryClasses();
-			Scene.v().loadBasicClasses();
+			soot.G.v().out = new PrintStream(baos, true, "utf-8");
+			// Now load the soot classes.
 
-			
+			Scene.v().loadBasicClasses();
+			Scene.v().loadNecessaryClasses();
+
 			// We explicitly select the packs we want to run for performance
-	        // reasons. Do not re-run the callgraph algorithm if the host
-	        // application already provides us with a CG.
-			if (cga != CallgraphAlgorithm.None
-					&& !Scene.v().hasCallGraph()) {
-		        PackManager.v().getPack("wjpp").apply();
-		        PackManager.v().getPack("cg").apply();
-			}			
-			
+			// reasons. Do not re-run the callgraph algorithm if the host
+			// application already provides us with a CG.
+			if (cga != CallgraphAlgorithm.None && !Scene.v().hasCallGraph()) {
+				PackManager.v().getPack("wjpp").apply();
+				PackManager.v().getPack("cg").apply();
+			}
+
+			/*
+			 * TODO: apply some preprocessing stuff like:
+			 * soot.jimple.toolkits.base or maybe the optimize option from soot.
+			 */
 			for (SootClass sc : Scene.v().getClasses()) {
+				if (sc.resolvingLevel() < SootClass.SIGNATURES) {
+					sc.setResolvingLevel(SootClass.SIGNATURES);
+				}
+
 				if (classes.contains(sc.getName())) {
 					sc.setApplicationClass();
-				}				
+				}
 			}
 			
-			Log.info("Done.");
 		} catch (UnsupportedEncodingException e) {
-			Log.error(e.toString());
-			return false;
+			throw new RuntimeException(e.toString());
 		} catch (RuntimeException e) {
-			Log.error("Soot could not process the input. STOPPING");
-			e.printStackTrace();
-			return false;
+			throw e;
 		}
-		return true;
 	}
-
-
 
 	/**
 	 * Returns the class path argument for Soot
@@ -290,8 +301,7 @@ public class SootRunner {
 	 * 
 	 * @param file
 	 *            JAR file object
-	 * @returns jarFiles
-	 *            List of dependent JARs
+	 * @returns jarFiles List of dependent JARs
 	 */
 	protected List<File> extractClassPath(File file) {
 		List<File> jarFiles = new LinkedList<File>();
@@ -310,8 +320,7 @@ public class SootRunner {
 				jarFile.close();
 				return jarFiles;
 			}
-			String classPath = mainAttributes
-					.getValue(Attributes.Name.CLASS_PATH);
+			String classPath = mainAttributes.getValue(Attributes.Name.CLASS_PATH);
 
 			// close JAR file
 			jarFile.close();
@@ -325,29 +334,27 @@ public class SootRunner {
 			for (String classPathItem : classPathItems) {
 				if (classPathItem.endsWith(".jar")) {
 					// add jar
-					Log.debug("Adding " + classPathItem
-							+ " to Soot's class path");
 					jarFiles.add(new File(file.getParent(), classPathItem));
 				}
 			}
 
 		} catch (IOException e) {
-			Log.error(e.toString());
+			throw new RuntimeException(e.toString());
 		}
 		return jarFiles;
 	}
 
-
 	/**
 	 * Enumerates all classes in a JAR file
-	 * @param file a Jar file
+	 * 
+	 * @param file
+	 *            a Jar file
 	 * @returns list of classes in the Jar file.
 	 */
 	protected List<String> enumClasses(File file) {
 		List<String> classes = new LinkedList<String>();
 		try {
 			// open JAR file
-			Log.debug("Opening jar " + file.getPath());
 			JarFile jarFile = new JarFile(file);
 			Enumeration<JarEntry> entries = jarFile.entries();
 
@@ -358,12 +365,10 @@ public class SootRunner {
 
 				if (entryName.endsWith(".class")) {
 					// get class
-					String className = entryName.substring(0,
-							entryName.length() - ".class".length());
+					String className = entryName.substring(0, entryName.length() - ".class".length());
 					className = className.replace('/', '.');
 
-					// add class
-					Log.debug("Adding class " + className);
+					// add class					
 					classes.add(className);
 				}
 			}
@@ -372,9 +377,8 @@ public class SootRunner {
 			jarFile.close();
 
 		} catch (IOException e) {
-			Log.error(e.toString());
+			throw new RuntimeException(e.getMessage());
 		}
 		return classes;
 	}
-
 }
