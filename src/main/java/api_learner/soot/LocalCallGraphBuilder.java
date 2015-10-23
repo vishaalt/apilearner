@@ -223,9 +223,13 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 					// TODO: 
 					System.err.println("no idea how to handle DynamicInvoke: " + ivk);
 					callees.add(ivk.getMethod());
-				} else if (invoke instanceof StaticInvokeExpr) {
+				} else if (invoke instanceof StaticInvokeExpr) {					
 					StaticInvokeExpr ivk = (StaticInvokeExpr) invoke;
-					callees.add(ivk.getMethod());
+					if (ivk.getMethod().hasActiveBody() || isInterestingProcedure(ivk.getMethod())) {
+						callees.add(ivk.getMethod());	
+					} else {
+						// do nothing
+					}
 				} else if (invoke instanceof InstanceInvokeExpr) {
 					InstanceInvokeExpr ivk = (InstanceInvokeExpr) invoke;
 					callees.addAll(resolveVirtualCall(s, ivk.getBase(),
