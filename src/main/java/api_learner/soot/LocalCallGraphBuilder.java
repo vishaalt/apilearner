@@ -6,29 +6,35 @@ import java.io.PrintWriter;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.Stack;
 
+import soot.Body;
+import soot.Hierarchy;
+import soot.RefType;
 import soot.Scene;
 import soot.SootClass;
 import soot.SootMethod;
+import soot.Trap;
 import soot.Unit;
 import soot.Value;
 import soot.jimple.DynamicInvokeExpr;
-import soot.jimple.InterfaceInvokeExpr;
+import soot.jimple.InstanceInvokeExpr;
 import soot.jimple.InvokeExpr;
 import soot.jimple.ReturnStmt;
 import soot.jimple.ReturnVoidStmt;
-import soot.jimple.SpecialInvokeExpr;
 import soot.jimple.StaticInvokeExpr;
 import soot.jimple.Stmt;
-import soot.jimple.VirtualInvokeExpr;
-import soot.jimple.toolkits.ide.icfg.JimpleBasedInterproceduralCFG;
-import api_learner.Options;
+import soot.jimple.ThrowStmt;
+import soot.toolkits.graph.CompleteUnitGraph;
 import soot.toolkits.graph.DirectedGraph;
 import soot.toolkits.scalar.ForwardFlowAnalysis;
+import api_learner.Options;
 
 
 public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<InterprocdurcalCallGraphNode>> {
@@ -36,7 +42,6 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 	private Map<Unit, InterprocdurcalCallGraphNode> nodes = new HashMap<Unit, InterprocdurcalCallGraphNode>();
 	private InterprocdurcalCallGraphNode source;
 	private InterprocdurcalCallGraphNode sink;
-	private JimpleBasedInterproceduralCFG icfg = null;
 		
 	/**
 	 * copy constructor
@@ -68,10 +73,12 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 	public LocalCallGraphBuilder duplicate() {
 		return new LocalCallGraphBuilder(this.graph, this.nodes, this.source, this.sink);
 	}
-		
-	public LocalCallGraphBuilder(DirectedGraph<Unit> graph, JimpleBasedInterproceduralCFG icfg) {
-		super(graph);
-		this.icfg = icfg;
+
+	private Body body = null;
+	
+	public LocalCallGraphBuilder(Body body) {
+		super(new CompleteUnitGraph(body));
+		this.body = body;
 		
 		this.source = new InterprocdurcalCallGraphNode();
 		this.source.setLabel("source");		
@@ -118,6 +125,22 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 				for (InterprocdurcalCallGraphNode pre : in) {
 					pre.connectTo(this.sink);
 				}
+			} else if (u instanceof ThrowStmt) {
+				//TODO: we need some sort of exceptional return!
+				Hierarchy hierarchy = Scene.v().getActiveHierarchy();
+				RefType thrownType = (RefType)((ThrowStmt)u).getOp().getType();
+				SootClass sc = thrownType.getSootClass();
+				boolean caught = false;
+				for (Trap trap : getTrapsGuardingUnit(u, body)) {
+					if (hierarchy.isClassSubclassOfIncluding(sc, trap.getException())) {
+						caught = true; break;
+					}
+				}
+				if (!caught) {
+					for (InterprocdurcalCallGraphNode pre : in) {
+						pre.connectTo(this.sink);
+					}					
+				}
 			} else {
 				out.addAll(in);				
 			}
@@ -138,6 +161,20 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 		}
 	}
 
+	protected List<Trap> getTrapsGuardingUnit(Unit u, Body b) {
+		List<Trap> result = new LinkedList<Trap>();
+		for (Trap t : b.getTraps()) {
+			Iterator<Unit> it = b.getUnits().iterator(t.getBeginUnit(), t.getEndUnit());
+			while (it.hasNext()) {
+				if (u.equals(it.next())) {
+					result.add(t);
+				}
+			}
+		}
+		return result;
+	}
+	
+	
 	public void removeNode(InterprocdurcalCallGraphNode n) {
 		Map<Unit, InterprocdurcalCallGraphNode> tmp = new HashMap<Unit, InterprocdurcalCallGraphNode>(this.nodes);
 		
@@ -150,7 +187,6 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 	
 	@Override
 	protected void copy(Set<InterprocdurcalCallGraphNode> from, Set<InterprocdurcalCallGraphNode> to) {
-		// TODO Auto-generated method stub
 		to.clear();
 		to.addAll(from);
 	}
@@ -172,11 +208,11 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 	private Set<SootMethod> findCallees(Unit u) {
 		Set<SootMethod> callees = new HashSet<SootMethod>();
 		
-		if (this.icfg!=null) {
-			//if we have the icfg, its simple.
-			callees.addAll(this.icfg.getCalleesOfCallAt(u));
-			return callees;
-		}
+//		if (this.icfg!=null) {
+//			//if we have the icfg, its simple.
+//			callees.addAll(this.icfg.getCalleesOfCallAt(u));
+//			return callees;
+//		}
 		
 		if (u instanceof Stmt) {
 			Stmt s = (Stmt) u;
@@ -184,22 +220,14 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 				InvokeExpr invoke = s.getInvokeExpr();
 				if (invoke instanceof DynamicInvokeExpr) {
 					DynamicInvokeExpr ivk = (DynamicInvokeExpr) invoke;
-					// TODO: Log.error("no idea how to handle DynamicInvoke: " +
-					// ivk);
-					callees.add(ivk.getMethod());
-				} else if (invoke instanceof InterfaceInvokeExpr) {
-					InterfaceInvokeExpr ivk = (InterfaceInvokeExpr) invoke;
-					callees.addAll(resolveVirtualCall(s, ivk.getBase(),
-							ivk.getMethod()));
-				} else if (invoke instanceof SpecialInvokeExpr) {
-					SpecialInvokeExpr ivk = (SpecialInvokeExpr) invoke;
-					// TODO: Log.info("not sure how to treat constructors");
+					// TODO: 
+					System.err.println("no idea how to handle DynamicInvoke: " + ivk);
 					callees.add(ivk.getMethod());
 				} else if (invoke instanceof StaticInvokeExpr) {
 					StaticInvokeExpr ivk = (StaticInvokeExpr) invoke;
 					callees.add(ivk.getMethod());
-				} else if (invoke instanceof VirtualInvokeExpr) {
-					VirtualInvokeExpr ivk = (VirtualInvokeExpr) invoke;
+				} else if (invoke instanceof InstanceInvokeExpr) {
+					InstanceInvokeExpr ivk = (InstanceInvokeExpr) invoke;
 					callees.addAll(resolveVirtualCall(s, ivk.getBase(),
 							ivk.getMethod()));
 				}
@@ -208,34 +236,43 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 		return callees;
 	}
 
+	
+	private boolean isInterestingProcedure(SootMethod callee) {
+		SootClass sc = callee.getDeclaringClass();
+		if (Options.v().getNamespace()!=null) {	
+			String fullClassName = callee.getDeclaringClass().getPackageName() + "." + callee.getDeclaringClass().getName();
+			if (fullClassName.contains(Options.v().getNamespace())) {
+				return true;
+			} else {
+				//do nothing
+			}
+		} else {
+			if (sc.isJavaLibraryClass()) {
+				//if no namespace is given, we consider any jdk call interesting.
+				//just for debugging
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	private Set<SootMethod> resolveVirtualCall(Stmt s, Value base,
 			SootMethod callee) {
 		Set<SootMethod> res = new HashSet<SootMethod>();
 		SootClass sc = callee.getDeclaringClass();
-
-		if (Options.v().getNamespace()!=null) {			
-			String fullClassName = callee.getDeclaringClass().getPackageName() + "." + callee.getDeclaringClass().getName();
-			if (fullClassName.contains(Options.v().getNamespace())) {
-				res.add(callee);
-				return res;				
-			} else {
-				if (!sc.isApplicationClass()) {
-					System.err.println("Ignoreing " + callee);
-					//if this is not an application class, pretend there was no call.
-					return res;
-				}
+		
+		if (callee.hasActiveBody()) {
+			//TODO: and add all overriding methods
+			res.add(callee);
+		} else {
+			if (!isInterestingProcedure(callee)) {
+				// if we neither have a body for the procedure, nor the are
+				// interested in the procedure, we just throw it away by returning
+				// the empty set.
+				return new HashSet<SootMethod>();
 			}
 		}
-		if (!sc.isJavaLibraryClass()) {
-			// don't care about non application API calls.
-			res.add(callee);
-			return res;
-		}
-
-		if (callee.hasActiveBody()) {
-			res.add(callee);
-		}
-
+		
 		Collection<SootClass> possibleClasses;
 		if (sc.isInterface()) {
 			possibleClasses = Scene.v().getFastHierarchy()

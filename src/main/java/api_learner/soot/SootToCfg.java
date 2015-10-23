@@ -17,13 +17,11 @@ import soot.Body;
 import soot.Scene;
 import soot.SootClass;
 import soot.SootMethod;
-import soot.Unit;
-import soot.jimple.toolkits.ide.icfg.JimpleBasedInterproceduralCFG;
-import soot.toolkits.exceptions.UnitThrowAnalysis;
-import soot.toolkits.graph.DirectedGraph;
-import soot.toolkits.graph.ExceptionalUnitGraph;
+import soot.jimple.toolkits.annotation.nullcheck.NullnessAnalysis;
+import soot.toolkits.graph.CompleteUnitGraph;
 import api_learner.Options;
 import api_learner.soot.SootRunner.CallgraphAlgorithm;
+import api_learner.soot.transformers.ExceptionTransformer;
 import api_learner.util.Log;
 
 /**
@@ -35,8 +33,6 @@ import api_learner.util.Log;
  *
  */
 public class SootToCfg {
-
-	private JimpleBasedInterproceduralCFG icfg = null;
 
 	Map<SootMethod, Set<SootMethod>> callDependencyMap = new HashMap<SootMethod, Set<SootMethod>>();
 	Map<SootMethod, LocalCallGraphBuilder> procedureCallGraphs = new HashMap<SootMethod, LocalCallGraphBuilder>();
@@ -52,13 +48,10 @@ public class SootToCfg {
 
 		// run soot to load all classes.
 		SootRunner runner = new SootRunner();
-		if (!runner.run(input)) {
-			return false;
-		}
+		runner.run(input, Options.v().getClasspath(), Options.v().getCallGraphAlgorithm());
 
 		if (Options.v().getCallGraphAlgorithm() != CallgraphAlgorithm.None) {
-			Log.info("Call Graph found");
-			icfg = new JimpleBasedInterproceduralCFG();
+			Log.info("Call Graph found ... but Ignored ... don't use spark for now!");
 		} else {
 			Log.info("No Callgraph (use -cg spark if you want one). Improvising!");
 		}
@@ -217,14 +210,12 @@ public class SootToCfg {
 	 *            Body
 	 */
 	private void transformStmtList(Body body) {
-		DirectedGraph<Unit> cfg;
-		if (this.icfg != null) {
-			cfg = this.icfg.getOrCreateUnitGraph(body);			
-		} else {
-			cfg = new ExceptionalUnitGraph(body, UnitThrowAnalysis.v());
-		}
+		//eliminate the exceptions first.
+		ExceptionTransformer transformer = new ExceptionTransformer(new NullnessAnalysis(new CompleteUnitGraph(body)));
+		transformer.transform(body);
 		
-		LocalCallGraphBuilder flow = new LocalCallGraphBuilder(cfg, this.icfg);
+		
+		LocalCallGraphBuilder flow = new LocalCallGraphBuilder(body);
 		// now collect all methods in ApplicationClasses that can be called from
 		// the body.
 		Set<SootMethod> calledApplicationMethods = new HashSet<SootMethod>();
