@@ -1,8 +1,0 @@
-digraph dot {
-	"sink__b9a4e527-c64b-4da3-a553-5cb753b705c7" [label="sink"  shape=oval ];
-
-	"source__54e54f62-d3ba-4fb9-9a87-0e3abec9d654" [label="source"  shape=oval ];
-
-
-	"source__54e54f62-d3ba-4fb9-9a87-0e3abec9d654" -> "sink__b9a4e527-c64b-4da3-a553-5cb753b705c7";
-}
