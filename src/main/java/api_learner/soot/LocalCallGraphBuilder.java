@@ -23,7 +23,10 @@ import soot.SootMethod;
 import soot.Trap;
 import soot.Unit;
 import soot.Value;
+import soot.JastAddJ.CastExpr;
+import soot.jimple.DefinitionStmt;
 import soot.jimple.DynamicInvokeExpr;
+import soot.jimple.InstanceFieldRef;
 import soot.jimple.InstanceInvokeExpr;
 import soot.jimple.InvokeExpr;
 import soot.jimple.ReturnStmt;
@@ -42,11 +45,12 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 	private Map<Unit, InterprocdurcalCallGraphNode> nodes = new HashMap<Unit, InterprocdurcalCallGraphNode>();
 	private InterprocdurcalCallGraphNode source;
 	private InterprocdurcalCallGraphNode sink;
+	private final Map<SootClass, InterprocdurcalCallGraphNode> exceptionalSinks = new HashMap<SootClass, InterprocdurcalCallGraphNode>();
 		
 	/**
 	 * copy constructor
 	 */
-	private LocalCallGraphBuilder(DirectedGraph<Unit> graph, Map<Unit, InterprocdurcalCallGraphNode> nodes, InterprocdurcalCallGraphNode source, InterprocdurcalCallGraphNode sink) {
+	private LocalCallGraphBuilder(DirectedGraph<Unit> graph, Map<Unit, InterprocdurcalCallGraphNode> nodes, InterprocdurcalCallGraphNode source, InterprocdurcalCallGraphNode sink, Map<SootClass, InterprocdurcalCallGraphNode> exSinks) {
 		super(graph);
 		Map<InterprocdurcalCallGraphNode, InterprocdurcalCallGraphNode> clones = new HashMap<InterprocdurcalCallGraphNode, InterprocdurcalCallGraphNode>();
 		//first clone all nodes
@@ -58,6 +62,12 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 		clones.put(source, source.duplicate());
 		if (sink!=null) {
 			clones.put(sink, sink.duplicate());
+		}
+				
+		for (Entry<SootClass, InterprocdurcalCallGraphNode> entry : exSinks.entrySet()) {
+			InterprocdurcalCallGraphNode clonedSink = entry.getValue().duplicate();
+			exceptionalSinks.put(entry.getKey(), clonedSink);
+			clones.put(entry.getValue(), clonedSink);
 		}
 		
 		//now connect the cloned nodes.
@@ -71,7 +81,7 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 	}
 	
 	public LocalCallGraphBuilder duplicate() {
-		return new LocalCallGraphBuilder(this.graph, this.nodes, this.source, this.sink);
+		return new LocalCallGraphBuilder(this.graph, this.nodes, this.source, this.sink, this.exceptionalSinks);
 	}
 
 	private Body body = null;
@@ -100,6 +110,14 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 		return this.sink;
 	}
 
+	/**
+	 * Its important that we return the original, so we can add stuff to it later.
+	 * @return
+	 */
+	public Map<SootClass, InterprocdurcalCallGraphNode> getExceptionalSinks() {
+		return exceptionalSinks;
+	}
+	
 	
 	public Set<InterprocdurcalCallGraphNode> getNodes() {
 		Set<InterprocdurcalCallGraphNode> res = new HashSet<InterprocdurcalCallGraphNode>();
@@ -125,25 +143,21 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 				for (InterprocdurcalCallGraphNode pre : in) {
 					pre.connectTo(this.sink);
 				}
-			} else if (u instanceof ThrowStmt) {
-				//TODO: we need some sort of exceptional return!
-				Hierarchy hierarchy = Scene.v().getActiveHierarchy();
+				return;
+			} 
+			
+			if (u instanceof ThrowStmt) {				
 				RefType thrownType = (RefType)((ThrowStmt)u).getOp().getType();
 				SootClass sc = thrownType.getSootClass();
-				boolean caught = false;
-				for (Trap trap : getTrapsGuardingUnit(u, body)) {
-					if (hierarchy.isClassSubclassOfIncluding(sc, trap.getException())) {
-						caught = true; break;
-					}
-				}
-				if (!caught) {
-					for (InterprocdurcalCallGraphNode pre : in) {
-						pre.connectTo(this.sink);
-					}					
-				}
-			} else {
-				out.addAll(in);				
-			}
+				connectUncaughtToExceptionalSink(in, u, sc);
+				return;
+			} 
+			
+			addPossibleExceptionSinks(in, u);
+			
+			out.addAll(in);
+			return;
+			
 		} else {
 			InterprocdurcalCallGraphNode n;
 			if (this.nodes.containsKey(u)) {
@@ -158,9 +172,67 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 			}
 			out.clear();
 			out.add(n);
+			
+			//Connect n to potential uncaught exceptional termination.
+			//TODO: This is a crude over-approximation 
+			Set<SootClass> thrownExceptions = new HashSet<SootClass>();
+			for (SootMethod sm : callees) {
+				thrownExceptions.addAll(sm.getExceptions());
+			}
+			thrownExceptions.add(Scene.v().getSootClass("java.lang.RuntimeException"));
+			for (SootClass ex : thrownExceptions) {
+				connectUncaughtToExceptionalSink(out, u, ex);
+			}
+			
+			return;
 		}
 	}
 
+	private void addPossibleExceptionSinks(Set<InterprocdurcalCallGraphNode> in, Unit u) {
+		Stmt s = (Stmt)u;
+		if (s.containsArrayRef()) {			
+			//TODO: check if this is always safe.
+			connectUncaughtToExceptionalSink(in, u, Scene.v().getSootClass("java.lang.ArrayIndexOutOfBoundsException"));
+		}
+		
+		if (s.containsFieldRef() && s.getFieldRef() instanceof InstanceFieldRef) {
+			//TODO: check if this is always safe.
+			connectUncaughtToExceptionalSink(in, u, Scene.v().getSootClass("java.lang.NullPointerException"));
+		}
+		
+		if (s instanceof DefinitionStmt && ((DefinitionStmt)s).getRightOp() instanceof CastExpr) {
+			//TODO: check if this is always safe.
+			connectUncaughtToExceptionalSink(in, u, Scene.v().getSootClass("java.lang.ClassCastException"));	
+		}
+		
+	}
+	
+	private void connectUncaughtToExceptionalSink(Set<InterprocdurcalCallGraphNode> nodes, Unit u, SootClass exception) {
+		Hierarchy hierarchy = Scene.v().getActiveHierarchy();
+		boolean caught = false;
+		for (Trap trap : getTrapsGuardingUnit(u, body)) {
+			if (hierarchy.isClassSubclassOfIncluding(exception, trap.getException())) {
+				caught = true; break;
+			}
+		}
+		if (!caught) {
+			if (!exceptionalSinks.containsKey(exception)) {		
+				InterprocdurcalCallGraphNode node = new InterprocdurcalCallGraphNode();
+				node.setLabel("Exception "+exception.getName());
+				exceptionalSinks.put(exception, node);
+			}
+			InterprocdurcalCallGraphNode exceptionSink = exceptionalSinks.get(exception);
+								
+			for (InterprocdurcalCallGraphNode pre : nodes) {
+				pre.connectTo(exceptionSink);
+			}
+			
+		}
+	}
+	
+	
+	
+	
 	protected List<Trap> getTrapsGuardingUnit(Unit u, Body b) {
 		List<Trap> result = new LinkedList<Trap>();
 		for (Trap t : b.getTraps()) {
@@ -243,14 +315,14 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 	
 	private boolean isInterestingProcedure(SootMethod callee) {
 		SootClass sc = callee.getDeclaringClass();
-		if (Options.v().getNamespace()!=null) {	
+		if (Options.v().getNamespace()!=null && !Options.v().getNamespace().isEmpty()) {
 			String fullClassName = callee.getDeclaringClass().getPackageName() + "." + callee.getDeclaringClass().getName();
 			if (fullClassName.contains(Options.v().getNamespace())) {
 				return true;
 			} else {
 				//do nothing
 			}
-		} else {
+		} else {			
 			if (sc.isJavaLibraryClass()) {
 				//if no namespace is given, we consider any jdk call interesting.
 				//just for debugging
@@ -270,6 +342,7 @@ public class LocalCallGraphBuilder extends ForwardFlowAnalysis<Unit, Set<Interpr
 			res.add(callee);
 		} else {
 			if (!isInterestingProcedure(callee)) {
+//				System.err.println(callee.getSignature() + " is not interesting");
 				// if we neither have a body for the procedure, nor the are
 				// interested in the procedure, we just throw it away by returning
 				// the empty set.

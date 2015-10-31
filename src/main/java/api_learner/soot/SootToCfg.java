@@ -4,6 +4,7 @@
 package api_learner.soot;
 
 import java.util.AbstractMap;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -14,14 +15,12 @@ import java.util.Set;
 import java.util.Stack;
 
 import soot.Body;
+import soot.Hierarchy;
 import soot.Scene;
 import soot.SootClass;
 import soot.SootMethod;
-import soot.jimple.toolkits.annotation.nullcheck.NullnessAnalysis;
-import soot.toolkits.graph.CompleteUnitGraph;
 import api_learner.Options;
 import api_learner.soot.SootRunner.CallgraphAlgorithm;
-import api_learner.soot.transformers.ExceptionTransformer;
 import api_learner.util.Log;
 
 /**
@@ -44,7 +43,7 @@ public class SootToCfg {
 	 *            either the root folder of a set of class files or a jarfile
 	 * @return true if the input could be analyzed and false otherwise.
 	 */
-	public boolean run(String input) {
+	public Collection<String> run(String input) {
 
 		// run soot to load all classes.
 		SootRunner runner = new SootRunner();
@@ -75,17 +74,21 @@ public class SootToCfg {
 		//TODO: some procedures might be ignored ...
 		// ... if their entry is already recursive
 
+		Collection<String> dotfileNames = new LinkedList<String>();
+		
 		int i = 0;
 		// build the icfg...
 		for (SootMethod m : myCG.getHeads()) {
 			LocalCallGraphBuilder cgb = inlineCallgraphs(m,
 					new Stack<Entry<SootMethod, LocalCallGraphBuilder>>());
 			if (!cgb.getNodes().isEmpty()) {
-				cgb.toDot("dot/" + String.format("%04d", i++) + "_" + m.getName()+".dot");
+				final String filename = "dot/" + String.format("%04d", i++) + "_" + m.getName()+".dot";
+				cgb.toDot(filename);				
+				dotfileNames.add(filename);
 			}
 		}
 
-		return true;
+		return dotfileNames;
 	}
 
 	private LocalCallGraphBuilder inlineCallgraphs(SootMethod m,
@@ -131,6 +134,64 @@ public class SootToCfg {
 							for (InterprocdurcalCallGraphNode pre : recursiveCg.getSink().predessors) {
 								pre.successors.remove(recursiveCg.getSink());
 							}
+						}
+						/*
+						 * each procedure call node is connected to all exceptional sinks that are mentioned in any throws clause
+						 * and to the exceptional sink of RuntimeException.
+						 * When we inline, we wire the exceptional sinks of the call side to the one of the graph that is being inlined.
+						 * This is necessary, because some of the exceptions thrown by the callee might be caught in the caller.
+						 */
+						
+						for (Entry<SootClass, InterprocdurcalCallGraphNode> entry : recursiveCg.getExceptionalSinks().entrySet()) {
+							//check if the current node is connected to an exceptional sink that also occurs in the callee.
+							//if so, re-wire the predecessors in the callee
+							if (cgb.getExceptionalSinks().containsKey(entry.getKey()) && n.successors.contains(cgb.getExceptionalSinks().get(entry.getKey()))) {
+//								System.err.println("Found sink for " + entry.getKey().getName());
+								InterprocdurcalCallGraphNode esink = entry.getValue();
+								for (InterprocdurcalCallGraphNode pre : new HashSet<InterprocdurcalCallGraphNode>(esink.predessors)) {
+									pre.successors.remove(esink);
+									pre.connectTo(cgb.getExceptionalSinks().get(entry.getKey()));
+									esink.predessors.remove(pre);
+								}
+							} else {
+//								System.err.println("No sink for " + entry.getKey().getName());
+								//check if there 
+								Set<SootClass> thrownSubtype = new HashSet<SootClass>();
+								Hierarchy hierarchy = Scene.v().getActiveHierarchy();
+								SootClass parent = entry.getKey();
+								for (Entry<SootClass, InterprocdurcalCallGraphNode> entry_ : cgb.getExceptionalSinks().entrySet()) {
+									if (hierarchy.isClassSubclassOfIncluding(entry_.getKey(), parent) ) {
+										thrownSubtype.add(entry_.getKey());
+									}
+								}
+								if (!thrownSubtype.isEmpty()) {									
+									for (InterprocdurcalCallGraphNode pre : new HashSet<InterprocdurcalCallGraphNode>(entry.getValue().predessors)) {
+										pre.successors.remove(entry.getValue());
+										entry.getValue().predessors.remove(pre);
+										for (SootClass exception : thrownSubtype) {
+											pre.connectTo(cgb.getExceptionalSinks().get(exception));
+										}
+									}
+								} else {									
+									//then this guy is not being caught on the caller side and 
+									//we have to add a new exceptional sink to cgb
+									InterprocdurcalCallGraphNode esink = entry.getValue();
+									SootClass exception = entry.getKey();
+									for (InterprocdurcalCallGraphNode pre : new HashSet<InterprocdurcalCallGraphNode>(esink.predessors)) {
+										pre.successors.remove(esink);
+										esink.predessors.remove(pre);
+										
+										if (!cgb.getExceptionalSinks().containsKey(exception)) {
+											InterprocdurcalCallGraphNode node = new InterprocdurcalCallGraphNode();
+											node.setLabel("Exception "+exception.getName());
+											cgb.getExceptionalSinks().put(exception, node);
+										}
+										InterprocdurcalCallGraphNode ex = cgb.getExceptionalSinks().get(exception); 
+										pre.connectTo(ex);			
+									}									
+								}
+							}
+							
 						}
 						
 						
@@ -211,8 +272,8 @@ public class SootToCfg {
 	 */
 	private void transformStmtList(Body body) {
 		//eliminate the exceptions first.
-		ExceptionTransformer transformer = new ExceptionTransformer(new NullnessAnalysis(new CompleteUnitGraph(body)));
-		transformer.transform(body);
+//		ExceptionTransformer transformer = new ExceptionTransformer(new NullnessAnalysis(new CompleteUnitGraph(body)));
+//		transformer.transform(body);
 		
 		
 		LocalCallGraphBuilder flow = new LocalCallGraphBuilder(body);

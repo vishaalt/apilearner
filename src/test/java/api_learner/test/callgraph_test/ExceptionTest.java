@@ -23,14 +23,14 @@ import api_learner.test.AbstractTest;
  *
  */
 @RunWith(Parameterized.class)
-public class CallGraphTest extends AbstractTest {
+public class ExceptionTest extends AbstractTest {
 
 	private File sourceFile;
 
 	@Parameterized.Parameters(name = "{index}: check ({1})")
 	public static Collection<Object[]> data() {
 		List<Object[]> filenames = new LinkedList<Object[]>();
-		final File source_dir = new File(testRoot + "callgraph_tests/");
+		final File source_dir = new File(testRoot + "exception_tests/");
 		File[] directoryListing = source_dir.listFiles();
 		if (directoryListing != null) {
 			for (File child : directoryListing) {
@@ -50,7 +50,7 @@ public class CallGraphTest extends AbstractTest {
 		return filenames;
 	}
 
-	public CallGraphTest(File source, String name) {
+	public ExceptionTest(File source, String name) {
 		this.sourceFile = source;
 	}
 
@@ -59,25 +59,12 @@ public class CallGraphTest extends AbstractTest {
 		String dotFileName = this.sourceFile.getName() + "_cha.dot";
 		Options.v().setOutFile(dotFileName);
 		testWithCallgraphAlgorithm("none");
-	}	
+	}
 
-//	@Test
-//	public void test_spark() {		
-//		String dotFileName = this.sourceFile.getName() + "_spark.dot";
-//		Options.v().setOutFile(dotFileName);
-//		testWithCallgraphAlgorithm("spark");
-//	}	
-
-	//TODO: VTA and RTA are not yet working.
-//	@Test
-//	public void test_vta() {		
-//		testWithCallgraphAlgorithm("vta");
-//	}	
-	
-	
 	protected void testWithCallgraphAlgorithm(String algorithm) {
 		soot.G.reset();
-		System.out.println("Running test " + this.sourceFile.getName() + " with algorithm " + algorithm);		
+		System.out.println("Running test " + this.sourceFile.getName()
+				+ " with algorithm " + algorithm);
 		SootToCfg soot2cfg = new SootToCfg();
 		Options.v().setCallGraphAlgorithm(algorithm);
 		File classDir = null;
@@ -87,10 +74,10 @@ public class CallGraphTest extends AbstractTest {
 			e.printStackTrace();
 			Assert.fail();
 		}
-		if (classDir==null) {
+		if (classDir == null) {
 			Assert.fail();
 		}
-		Options.v().setNamespace("javax.net");
+		// Options.v().setNamespace("java.lang");
 		Collection<String> filenames = soot2cfg.run(classDir.getAbsolutePath());
 
 		try {
@@ -106,5 +93,5 @@ public class CallGraphTest extends AbstractTest {
 		}
 
 	}
-	
+
 }
