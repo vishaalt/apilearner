@@ -3,6 +3,9 @@
  */
 package api_learner.soot;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.HashMap;
@@ -76,21 +79,70 @@ public class SootToCfg {
 
 		Collection<String> dotfileNames = new LinkedList<String>();
 		
-		int i = 0;
+//		int i = 0;
 		// build the icfg...
+		Map<SootMethod, LocalCallGraphBuilder> graphs = new HashMap<SootMethod, LocalCallGraphBuilder>();
 		for (SootMethod m : myCG.getHeads()) {
 			LocalCallGraphBuilder cgb = inlineCallgraphs(m,
 					new Stack<Entry<SootMethod, LocalCallGraphBuilder>>());
 			if (!cgb.getNodes().isEmpty()) {
-				final String filename = "dot/" + String.format("%04d", i++) + "_" + m.getName()+".dot";
-				cgb.toDot(filename);				
-				dotfileNames.add(filename);
+//				final String filename = "dot/" + String.format("%04d", i++) + "_" + m.getName()+".dot";
+//				cgb.toDot(filename);				
+//				dotfileNames.add(filename);
+				graphs.put(m, cgb);
 			}
 		}
+		File outdir = new File("dot/");
+		if (!outdir.exists() || !outdir.isDirectory()) {
+			if (!outdir.mkdir()) {
+				System.err.println("say sth meaningful");
+			}
+		}
+		dotfileNames.addAll(generateDotFiles(outdir, graphs, true));
 
 		return dotfileNames;
 	}
 
+	
+	public Collection<String> generateDotFiles(File outputDir, Map<SootMethod, LocalCallGraphBuilder> graphs, boolean generatePdf) {
+		final String methodToDotMappingFilename = "methods.txt";
+		Collection<String> dotfileNames = new LinkedList<String>();
+		File mappingFile = new File(outputDir.getAbsolutePath() + File.separator + methodToDotMappingFilename);
+		try (FileWriter fileWritter = new FileWriter(mappingFile.getAbsolutePath(), true);
+				BufferedWriter bufferWritter = new BufferedWriter(fileWritter);) {
+			long counter = 0L;
+			for (Entry<SootMethod, LocalCallGraphBuilder> entry : graphs.entrySet()) {
+				// create the dot file.
+				String dotFilename = String.format("%09d.dot", counter);
+				File dotFile = new File(outputDir.getAbsolutePath() + File.separator + dotFilename);
+				dotfileNames.add(dotFile.getAbsolutePath());
+				entry.getValue().toDot(dotFile.getAbsolutePath());
+				bufferWritter.write(entry.getKey().getSignature());
+				bufferWritter.write("\t");
+				bufferWritter.write(dotFilename);
+				bufferWritter.write("\n");
+				counter++;
+				
+				if (generatePdf) {
+					try {
+						String pdffileName = dotFile.getAbsolutePath().replace(".dot", ".pdf");
+						Process p = Runtime.getRuntime()
+								.exec("/usr/local/bin/dot -Tpdf " + dotFile.getAbsolutePath() + " -o " + pdffileName);
+						p.waitFor();
+					} catch (Throwable e) {
+						System.err.println(e.toString());
+					}
+				}
+				
+			}
+		} catch (Throwable e) {
+			throw new RuntimeException("Storing failed: " + e.toString());
+		}
+		return dotfileNames;
+
+	}
+	
+	
 	private LocalCallGraphBuilder inlineCallgraphs(SootMethod m,
 			Stack<Entry<SootMethod, LocalCallGraphBuilder>> callStack) {
 		LocalCallGraphBuilder cgb = this.procedureCallGraphs.get(m).duplicate();
