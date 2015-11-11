@@ -90,11 +90,12 @@ public class CallGraphTest extends AbstractTest {
 		if (classDir==null) {
 			Assert.fail();
 		}
-		Options.v().setNamespace("javax.net");
-		Collection<String> filenames = soot2cfg.run(classDir.getAbsolutePath());
-
+		Options.v().setNamespace("java");
+		Collection<String> filenames = soot2cfg.run(classDir.getAbsolutePath());		
+		
 		try {
 			for (String dotfileName : filenames) {
+				System.err.println(dotfileName);
 				String pdffileName = dotfileName.replace(".dot", ".pdf");
 				Process p = Runtime.getRuntime().exec(
 						"/usr/local/bin/dot -Tpdf " + dotfileName + " -o "

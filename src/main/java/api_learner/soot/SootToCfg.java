@@ -8,8 +8,9 @@ import java.io.File;
 import java.io.FileWriter;
 import java.util.AbstractMap;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -36,8 +37,8 @@ import api_learner.util.Log;
  */
 public class SootToCfg {
 
-	Map<SootMethod, Set<SootMethod>> callDependencyMap = new HashMap<SootMethod, Set<SootMethod>>();
-	Map<SootMethod, LocalCallGraphBuilder> procedureCallGraphs = new HashMap<SootMethod, LocalCallGraphBuilder>();
+	Map<SootMethod, Set<SootMethod>> callDependencyMap = new LinkedHashMap<SootMethod, Set<SootMethod>>();
+	Map<SootMethod, LocalCallGraphBuilder> procedureCallGraphs = new LinkedHashMap<SootMethod, LocalCallGraphBuilder>();
 
 	/**
 	 * Generates the call graph for given input
@@ -81,7 +82,7 @@ public class SootToCfg {
 		
 //		int i = 0;
 		// build the icfg...
-		Map<SootMethod, LocalCallGraphBuilder> graphs = new HashMap<SootMethod, LocalCallGraphBuilder>();
+		Map<SootMethod, LocalCallGraphBuilder> graphs = new LinkedHashMap<SootMethod, LocalCallGraphBuilder>();
 		for (SootMethod m : myCG.getHeads()) {
 			LocalCallGraphBuilder cgb = inlineCallgraphs(m,
 					new Stack<Entry<SootMethod, LocalCallGraphBuilder>>());
@@ -200,7 +201,7 @@ public class SootToCfg {
 							if (cgb.getExceptionalSinks().containsKey(entry.getKey()) && n.successors.contains(cgb.getExceptionalSinks().get(entry.getKey()))) {
 //								System.err.println("Found sink for " + entry.getKey().getName());
 								InterprocdurcalCallGraphNode esink = entry.getValue();
-								for (InterprocdurcalCallGraphNode pre : new HashSet<InterprocdurcalCallGraphNode>(esink.predessors)) {
+								for (InterprocdurcalCallGraphNode pre : new LinkedHashSet<InterprocdurcalCallGraphNode>(esink.predessors)) {
 									pre.successors.remove(esink);
 									pre.connectTo(cgb.getExceptionalSinks().get(entry.getKey()));
 									esink.predessors.remove(pre);
@@ -323,6 +324,7 @@ public class SootToCfg {
 	 *            Body
 	 */
 	private void transformStmtList(Body body) {
+//		System.err.println(body);
 		//eliminate the exceptions first.
 //		ExceptionTransformer transformer = new ExceptionTransformer(new NullnessAnalysis(new CompleteUnitGraph(body)));
 //		transformer.transform(body);
@@ -331,7 +333,7 @@ public class SootToCfg {
 		LocalCallGraphBuilder flow = new LocalCallGraphBuilder(body);
 		// now collect all methods in ApplicationClasses that can be called from
 		// the body.
-		Set<SootMethod> calledApplicationMethods = new HashSet<SootMethod>();
+		Set<SootMethod> calledApplicationMethods = new LinkedHashSet<SootMethod>();
 		for (InterprocdurcalCallGraphNode n : flow.getNodes()) {
 			for (SootMethod m : n.getCallees()) {
 				if (m.getDeclaringClass().isApplicationClass()) {
