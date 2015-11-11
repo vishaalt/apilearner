@@ -99,7 +99,7 @@ public class SootToCfg {
 				System.err.println("say sth meaningful");
 			}
 		}
-		dotfileNames.addAll(generateDotFiles(outdir, graphs, true));
+		dotfileNames.addAll(generateDotFiles(outdir, graphs, Options.v().getGeneratePdf()));
 
 		return dotfileNames;
 	}

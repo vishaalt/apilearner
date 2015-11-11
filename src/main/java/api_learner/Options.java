@@ -63,6 +63,16 @@ public class Options {
 		this.outFileDirName = file;
 	}
 
+	/**
+	 * JAR file
+	 */
+	@Option(name = "-pdf", usage = "generate pdf files", required = false)
+	private boolean generatePdf = false;
+
+	public boolean getGeneratePdf() {
+		return this.generatePdf;
+	}
+	
 	@Option(name = "-cg", usage = "Set the callgraph algorithm: CHA,RTA,VTA,SPARK, or None (default).", required = false)
 	private String callGraphAlgorithm = "None";
 	public CallgraphAlgorithm getCallGraphAlgorithm() {
