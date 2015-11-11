@@ -55,8 +55,6 @@ public class MutualRecursiveTest extends AbstractTest {
 
 	@Test
 	public void test_cha() {
-		String dotFileName = this.sourceFile.getName() + "_cha.dot";
-		Options.v().setOutFile(dotFileName);
 		testWithCallgraphAlgorithm("none");
 	}	
 

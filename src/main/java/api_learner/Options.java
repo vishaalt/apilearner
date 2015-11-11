@@ -54,13 +54,13 @@ public class Options {
 		return this.javaInput;
 	}
 
-	@Option(name = "-o", usage = "Callgraph dot file", required = false)
-	private String outFile = "out.dot";
-	public String getOutFile() {
-		return this.outFile;
+	@Option(name = "-o", usage = "Callgraph dot file directory", required = false)
+	private String outFileDirName = "./";
+	public String getOutFileDirName() {
+		return this.outFileDirName;
 	}
-	public void setOutFile(String file) {
-		this.outFile = file;
+	public void setOutFileDirName(String file) {
+		this.outFileDirName = file;
 	}
 
 	@Option(name = "-cg", usage = "Set the callgraph algorithm: CHA,RTA,VTA,SPARK, or None (default).", required = false)

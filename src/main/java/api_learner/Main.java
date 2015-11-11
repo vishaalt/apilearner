@@ -20,6 +20,7 @@ public class Main {
 			parser.parseArgument(args);
 			SootToCfg soot2cfg = new SootToCfg();
 			soot2cfg.run(Options.v().getJavaInput());
+			System.err.println("Written output to "+ Options.v().getOutFileDirName());
 		} catch (CmdLineException e) {
 			Log.error(e.toString());
 			Log.error("java -jar apilearner.jar [options...] arguments...");

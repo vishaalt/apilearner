@@ -71,10 +71,10 @@ public class SootToCfg {
 		 */
 		MyCallDependencyGraph myCG = new MyCallDependencyGraph(
 				this.callDependencyMap);
-		myCG.toDot("cg.dot");
-		for (SootMethod m : myCG.getHeads()) {
-			System.out.println("Entries " + m.getName());
-		}
+//		myCG.toDot("cg.dot");
+//		for (SootMethod m : myCG.getHeads()) {
+//			System.out.println("Entries " + m.getName());
+//		}
 		//TODO: some procedures might be ignored ...
 		// ... if their entry is already recursive
 
@@ -93,7 +93,7 @@ public class SootToCfg {
 				graphs.put(m, cgb);
 			}
 		}
-		File outdir = new File("dot/");
+		File outdir = new File(Options.v().getOutFileDirName());
 		if (!outdir.exists() || !outdir.isDirectory()) {
 			if (!outdir.mkdir()) {
 				System.err.println("say sth meaningful");
