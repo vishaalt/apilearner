@@ -9,10 +9,13 @@ import org.kohsuke.args4j.CmdLineParser;
 import api_learner.soot.SootToCfg;
 import api_learner.util.Log;
 
+import javax.crypto.Cipher;
 
 public class Main {
 
 	public static void main(String[] args) {
+		Cipher c = Cipher.getInstance("DES");
+		System.err.println(c);
 		Options options = Options.v();
 		CmdLineParser parser = new CmdLineParser(options);
 		try {
