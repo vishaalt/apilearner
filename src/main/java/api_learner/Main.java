@@ -14,11 +14,13 @@ import javax.crypto.Cipher;
 public class Main {
 
 	public static void main(String[] args) {
-		Cipher c = Cipher.getInstance("DES");
-		System.err.println(c);
 		Options options = Options.v();
 		CmdLineParser parser = new CmdLineParser(options);
 		try {
+			// something for guru
+			Cipher c = Cipher.getInstance("DES");
+			System.err.println(c);
+	
 			// parse command-line arguments
 			parser.parseArgument(args);
 			SootToCfg soot2cfg = new SootToCfg();
