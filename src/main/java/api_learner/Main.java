@@ -13,7 +13,7 @@ import javax.crypto.Cipher;
 
 public class Main {
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		Options options = Options.v();
 		CmdLineParser parser = new CmdLineParser(options);
 		try {
