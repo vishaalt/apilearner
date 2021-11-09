@@ -2,9 +2,9 @@ name: Analyze with CodeGuru Reviewer
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, martinschaef-patch-1, martinschaef-patch-3 ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, martinschaef-patch-1, martinschaef-patch-3 ]
     types: [opened, closed]
 permissions:
     id-token: write
