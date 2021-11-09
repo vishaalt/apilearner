@@ -27,7 +27,7 @@ jobs:
       run: ./gradlew build -x test
 
     - name: Configure AWS credentials from Test account
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@master
       with:
         role-to-assume: arn:aws:iam::727015569506:role/GitHubOidcRole
         aws-region: us-west-2
