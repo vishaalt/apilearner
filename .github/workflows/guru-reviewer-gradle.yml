@@ -1,11 +1,7 @@
 name: Analyze with CodeGuru Reviewer
 
-on:
-  push:
-    branches: [ main, master, martinschaef-patch-1, martinschaef-patch-3 ]
-  pull_request:
-    branches: [ main, master, martinschaef-patch-1, martinschaef-patch-3 ]
-    types: [opened, closed]
+on: [push, pull_request]
+
 permissions:
     id-token: write
     contents: write    # This is required for actions/checkout@v1
@@ -34,12 +30,13 @@ jobs:
 
     - name: CodeGuru Reviewer
       uses: aws-actions/codeguru-reviewer@v1.1
-      continue-on-error: true
+      continue-on-error: false
       with:          
         s3_bucket: ${{ secrets.BUCKET_NAME }}
         build_path: ./build/libs
 
-    - name: Upload review result      
+    - name: Upload review result
+      if: ${{ github.event_name != 'push' }}
       uses: github/codeql-action/upload-sarif@v1
       with:
         sarif_file: codeguru-results.sarif.json
