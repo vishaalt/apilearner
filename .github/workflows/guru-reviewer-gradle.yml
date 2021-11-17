@@ -4,7 +4,8 @@ on: [push, pull_request]
 
 permissions:
     id-token: write
-    contents: write    # This is required for actions/checkout@v1
+    contents: write
+    security-events: write 
 
 jobs:
   build:
@@ -25,14 +26,14 @@ jobs:
     - name: Configure AWS credentials from Test account
       uses: aws-actions/configure-aws-credentials@master
       with:
-        role-to-assume: arn:aws:iam::727015569506:role/GitHubOidcRole
-        aws-region: us-west-2
+        role-to-assume: arn:aws:iam::727015569506:role/GitHubActionRole
+        aws-region: us-east-1
 
     - name: CodeGuru Reviewer
       uses: aws-actions/codeguru-reviewer@v1.1
       continue-on-error: false
       with:          
-        s3_bucket: ${{ secrets.BUCKET_NAME }}
+        s3_bucket: codeguru-reviewer-build-artifacts-727015569506-us-east-1
         build_path: ./build/libs
 
     - name: Upload review result
