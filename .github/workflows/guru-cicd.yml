@@ -1,4 +1,4 @@
-name: Analyze with CodeGuru Reviewer
+name: Analyze with CodeGuru Reviewer demo
 
 on: [push, pull_request]
 
@@ -40,3 +40,5 @@ jobs:
       uses: github/codeql-action/upload-sarif@v1
       with:
         sarif_file: codeguru-results.sarif.json
+        
+
